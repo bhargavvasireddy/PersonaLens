@@ -1,0 +1,40 @@
+export type Persona = {
+  id: number;
+  name: string;
+  description: string;
+  created_at: string;
+};
+
+export type EvaluationIssue = {
+  title: string;
+  description: string;
+  severity: "low" | "medium" | "high";
+  category: string;
+};
+
+export type EvaluationResult = {
+  summary: string;
+  overall_score: number;
+  highlights: string[];
+  issues: EvaluationIssue[];
+  recommendations: string[];
+};
+
+export type Evaluation = {
+  id: number;
+  image_path: string;
+  primary_persona_id: number;
+  primary_persona_name: string;
+  compare_persona_id: number | null;
+  compare_persona_name: string | null;
+  status: "succeeded" | "failed";
+  overall_score: number | null;
+  error_message: string | null;
+  result_json: EvaluationResult | Record<string, unknown>;
+  created_at: string;
+};
+
+export type CreatePersonaInput = {
+  name: string;
+  description: string;
+};

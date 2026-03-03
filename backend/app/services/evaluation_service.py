@@ -1,0 +1,186 @@
+import base64
+import json
+import mimetypes
+import re
+from pathlib import Path
+
+from openai import OpenAI
+from pydantic import ValidationError
+
+from app.core.config import settings
+from app.db.models import Persona
+from app.schemas.evaluation import EvaluationResult
+
+
+class AIModelCallError(Exception):
+    pass
+
+
+class AIInvalidJSONError(Exception):
+    pass
+
+
+SYSTEM_PROMPT = (
+    "You are a senior UX researcher. Return only valid JSON and no extra text."
+    " Evaluate the UI screenshot against the persona context and provide actionable feedback."
+)
+
+
+def evaluate_ui(
+    image_path: str,
+    primary_persona: Persona,
+    compare_persona: Persona | None = None,
+) -> EvaluationResult:
+    if not settings.openai_api_key.strip():
+        raise AIModelCallError("OPENAI_API_KEY is not configured.")
+
+    client = OpenAI(api_key=settings.openai_api_key)
+    model_name = settings.model_name or "gpt-4o-mini"
+    prompt = _build_prompt(primary_persona, compare_persona)
+
+    try:
+        raw_text = _call_vision_model(client=client, model_name=model_name, prompt=prompt, image_path=image_path)
+    except Exception as vision_error:
+        try:
+            fallback_prompt = (
+                f"{prompt}\n\nFallback disclaimer: visual analysis is unavailable; treat this as a text-only"
+                f" evaluation for screenshot file '{Path(image_path).name}'."
+            )
+            raw_text = _call_text_model(client=client, model_name=model_name, prompt=fallback_prompt)
+        except Exception as fallback_error:
+            raise AIModelCallError(
+                f"Vision call failed ({vision_error}); text fallback failed ({fallback_error})."
+            ) from fallback_error
+
+    return _parse_and_validate(raw_text)
+
+
+def _build_prompt(primary_persona: Persona, compare_persona: Persona | None) -> str:
+    compare_block = (
+        f"Compare persona name: {compare_persona.name}\nCompare persona description: {compare_persona.description}"
+        if compare_persona is not None
+        else "No compare persona provided."
+    )
+
+    return f"""
+Evaluate this UI screenshot from the perspective of these personas.
+
+Primary persona name: {primary_persona.name}
+Primary persona description: {primary_persona.description}
+{compare_block}
+
+Return JSON with exactly this structure:
+{{
+  "summary": "string",
+  "overall_score": 0.0,
+  "highlights": ["string"],
+  "issues": [
+    {{
+      "title": "string",
+      "description": "string",
+      "severity": "low|medium|high",
+      "category": "string"
+    }}
+  ],
+  "recommendations": ["string"]
+}}
+
+Rules:
+- overall_score must be a number between 0 and 1.
+- Keep recommendations concise and actionable.
+- Do not return markdown, code fences, or prose outside JSON.
+""".strip()
+
+
+def _call_vision_model(client: OpenAI, model_name: str, prompt: str, image_path: str) -> str:
+    image_file = Path(image_path)
+    if not image_file.exists():
+        raise AIModelCallError(f"Image does not exist: {image_path}")
+
+    mime_type = mimetypes.guess_type(image_file.name)[0] or "application/octet-stream"
+    image_b64 = base64.b64encode(image_file.read_bytes()).decode("utf-8")
+    image_data_url = f"data:{mime_type};base64,{image_b64}"
+
+    completion = client.chat.completions.create(
+        model=model_name,
+        response_format={"type": "json_object"},
+        temperature=0.2,
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": image_data_url}},
+                ],
+            },
+        ],
+    )
+    return _completion_to_text(completion)
+
+
+def _call_text_model(client: OpenAI, model_name: str, prompt: str) -> str:
+    completion = client.chat.completions.create(
+        model=model_name,
+        response_format={"type": "json_object"},
+        temperature=0.2,
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ],
+    )
+    return _completion_to_text(completion)
+
+
+def _completion_to_text(completion: object) -> str:
+    choices = getattr(completion, "choices", None)
+    if not choices:
+        raise AIModelCallError("Model returned no choices.")
+
+    message = choices[0].message
+    content = getattr(message, "content", None)
+    if isinstance(content, str):
+        text = content.strip()
+        if text:
+            return text
+    if isinstance(content, list):
+        fragments: list[str] = []
+        for item in content:
+            if isinstance(item, dict):
+                maybe_text = item.get("text")
+                if isinstance(maybe_text, str):
+                    fragments.append(maybe_text)
+        merged = "".join(fragments).strip()
+        if merged:
+            return merged
+    raise AIModelCallError("Model response content is empty.")
+
+
+def _extract_json_payload(raw_text: str) -> dict[str, object]:
+    try:
+        parsed = json.loads(raw_text)
+        if isinstance(parsed, dict):
+            return parsed
+    except json.JSONDecodeError:
+        pass
+
+    match = re.search(r"\{[\s\S]*\}", raw_text)
+    if match is None:
+        raise AIInvalidJSONError("Model output did not contain JSON.")
+
+    try:
+        parsed = json.loads(match.group(0))
+    except json.JSONDecodeError as exc:
+        raise AIInvalidJSONError("Model output JSON could not be parsed.") from exc
+
+    if not isinstance(parsed, dict):
+        raise AIInvalidJSONError("Model output JSON must be an object.")
+    return parsed
+
+
+def _parse_and_validate(raw_text: str) -> EvaluationResult:
+    payload = _extract_json_payload(raw_text)
+    try:
+        return EvaluationResult.model_validate(payload)
+    except ValidationError as exc:
+        raise AIInvalidJSONError("Model output did not match required schema.") from exc
