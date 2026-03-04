@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
@@ -109,8 +110,11 @@ export default function LoginPage() {
           </form>
         </div>
 
-        <p className="mt-6 text-center text-xs text-slate-400">
-          Managed via Supabase Auth — contact your admin for access
+        <p className="mt-6 text-center text-sm text-slate-500">
+          Don&apos;t have an account?{" "}
+          <Link href="/signup" className="font-medium text-indigo-600 hover:text-indigo-700">
+            Sign up
+          </Link>
         </p>
       </div>
     </div>

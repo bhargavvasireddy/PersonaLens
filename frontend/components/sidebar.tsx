@@ -78,7 +78,7 @@ export function Sidebar() {
   }
 
   // Hide sidebar on login page so it can render full-screen
-  if (pathname === "/login") return null;
+  if (pathname === "/login" || pathname === "/signup") return null;
 
   return (
     <aside className="flex w-64 shrink-0 flex-col border-r border-slate-200 bg-slate-50">
