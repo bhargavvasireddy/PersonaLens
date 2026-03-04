@@ -56,14 +56,34 @@ def evaluate_ui(
 
 
 def _build_prompt(primary_persona: Persona, compare_persona: Persona | None) -> str:
-    compare_block = (
-        f"Compare persona name: {compare_persona.name}\nCompare persona description: {compare_persona.description}"
-        if compare_persona is not None
-        else "No compare persona provided."
-    )
+    if compare_persona is not None:
+        compare_block = f"Compare persona name: {compare_persona.name}\nCompare persona description: {compare_persona.description}"
+        evaluation_instruction = (
+            "Evaluate this UI screenshot from both personas and provide a side-by-side comparison."
+        )
+        report_instruction = (
+            "frontend_report must be a single string containing **only HTML** (no markdown). "
+            f"**Title:** One line at the top: <h1>PrimaryName vs. CompareName</h1> using the actual names \"{primary_persona.name}\" and \"{compare_persona.name}\" (e.g. \"{primary_persona.name} vs. {compare_persona.name}\"). Keep the title as a single heading at the top. "
+            "**Line under the vs:** Right below the title, output one row that shows only the vertical separator so it sits directly under the \"vs\" in the title: <div class=\"persona-comparison\"><div class=\"persona-col\"></div><div class=\"persona-divider\"></div><div class=\"persona-col\"></div></div> (empty columns, so the line appears centered under the title). "
+            "Use HTML for structure: <h2>, <h3>, <h4>, <p>, <strong>, <ul><li>, <ol><li>. "
+            "**Side-by-side layout (required):** For each comparison section use: <div class=\"persona-comparison\"><div class=\"persona-col\">first persona content</div><div class=\"persona-divider\"></div><div class=\"persona-col\">second persona content</div></div>. First persona-col = primary, second = compare. "
+            "**Each column must include that persona's own score and full analysis.** Use one persona-comparison block per section (Summary, Highlights, Issues, Recommendations). Include all JSON fields, split per persona. "
+            "**Tradeoffs &amp; solutions (required at the end):** You MUST end the report with a full section: <h2>Tradeoffs &amp; solutions</h2> followed by one or more paragraphs analyzing potential tradeoffs and solutions to best serve both personas (e.g. where their needs conflict and how the UI could address both). Do not omit this section. "
+            "Escape quotes in attributes as \\\" and use &amp; for ampersands in the JSON string."
+        )
+    else:
+        compare_block = "No compare persona provided."
+        evaluation_instruction = "Evaluate this UI screenshot from the perspective of this persona."
+        report_instruction = (
+            "frontend_report must be a single string containing **only HTML** (no markdown). "
+            "Use HTML for structure and formatting: <h1><strong>Persona Name</strong></h1> at the top, "
+            "<h2> for section headers, <h3> or <h4> for subsections, <p> for paragraphs, <strong> for emphasis, "
+            "<ul><li> or <ol><li> for lists. The frontend_report **must include every important field from the JSON**: the **overall_score** (show the numeric score), **summary**, all **highlights**, all **issues** (each with title, description, severity, category), and all **recommendations**. Do not omit any of these. "
+            "End with a brief summary section. Escape quotes in attributes as \\\" in the JSON string."
+        )
 
     return f"""
-Evaluate this UI screenshot from the perspective of these personas.
+{evaluation_instruction}
 
 Primary persona name: {primary_persona.name}
 Primary persona description: {primary_persona.description}
@@ -82,13 +102,15 @@ Return JSON with exactly this structure:
       "category": "string"
     }}
   ],
-  "recommendations": ["string"]
+  "recommendations": ["string"],
+  "frontend_report": "string"
 }}
 
 Rules:
 - overall_score must be a number between 0 and 1.
 - Keep recommendations concise and actionable.
-- Do not return markdown, code fences, or prose outside JSON.
+- {report_instruction}
+- Do not return markdown syntax (# or **), code fences, or prose outside the JSON object.
 """.strip()
 
 

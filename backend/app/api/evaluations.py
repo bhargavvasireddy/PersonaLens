@@ -35,6 +35,14 @@ def _serialize_evaluation(evaluation: models.Evaluation, db: Session) -> Evaluat
         db.get(models.Persona, evaluation.compare_persona_id) if evaluation.compare_persona_id is not None else None
     )
 
+    frontend_report = ""
+    if isinstance(parsed_result, EvaluationResult):
+        frontend_report = getattr(parsed_result, "frontend_report", "") or getattr(parsed_result, "report_markdown", "") or ""
+    elif isinstance(parsed_result, dict):
+        frontend_report = parsed_result.get("frontend_report") or parsed_result.get("report_markdown") or ""
+    if not isinstance(frontend_report, str):
+        frontend_report = ""
+
     return EvaluationRead(
         id=evaluation.id,
         image_path=evaluation.image_path,
@@ -46,6 +54,7 @@ def _serialize_evaluation(evaluation: models.Evaluation, db: Session) -> Evaluat
         overall_score=evaluation.overall_score,
         error_message=evaluation.error_message,
         result_json=parsed_result,
+        frontend_report=frontend_report,
         created_at=evaluation.created_at,
     )
 

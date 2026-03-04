@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import DOMPurify from "dompurify";
 import { createEvaluation, getPersonas } from "@/lib/api";
 import { Evaluation, Persona } from "@/lib/types";
 
@@ -19,10 +20,23 @@ export default function UiAnalysisPage() {
       .catch((err: Error) => setError(err.message));
   }, []);
 
-  const personaOptions = useMemo(
+  const primaryPersonaOptions = useMemo(
     () => personas.map((p) => ({ value: String(p.id), label: p.name })),
     [personas]
   );
+
+  const comparePersonaOptions = useMemo(
+    () =>
+      personas
+        .filter((p) => String(p.id) !== primaryPersonaId)
+        .map((p) => ({ value: String(p.id), label: p.name })),
+    [personas, primaryPersonaId]
+  );
+
+  function onPrimaryPersonaChange(value: string) {
+    setPrimaryPersonaId(value);
+    if (comparePersonaId === value) setComparePersonaId("");
+  }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -83,11 +97,11 @@ export default function UiAnalysisPage() {
           <label className="text-sm font-medium">Primary persona</label>
           <select
             value={primaryPersonaId}
-            onChange={(e) => setPrimaryPersonaId(e.target.value)}
+            onChange={(e) => onPrimaryPersonaChange(e.target.value)}
             className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
           >
             <option value="">Select persona</option>
-            {personaOptions.map((option) => (
+            {primaryPersonaOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
@@ -103,7 +117,7 @@ export default function UiAnalysisPage() {
             className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
           >
             <option value="">No comparison</option>
-            {personaOptions.map((option) => (
+            {comparePersonaOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
@@ -125,9 +139,16 @@ export default function UiAnalysisPage() {
       {result && (
         <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
           <h3 className="text-lg font-semibold text-slate-900">Latest Evaluation</h3>
-          <pre className="mt-3 overflow-x-auto rounded bg-slate-900 p-4 text-xs text-slate-100">
-            {JSON.stringify(result, null, 2)}
-          </pre>
+          {result.frontend_report ? (
+            <div
+              className="evaluation-report mt-3 text-sm text-slate-700 [&_.persona-comparison]:grid [&_.persona-comparison]:grid-cols-[1fr_2px_1fr] [&_.persona-comparison]:gap-0 [&_.persona-comparison]:my-4 [&_.persona-comparison]:items-stretch [&_.persona-comparison]:w-full [&_.persona-col]:min-w-0 [&_.persona-col]:px-4 [&_.persona-col]:py-3 [&_.persona-col]:align-top [&_.persona-divider]:bg-slate-300 [&_.persona-divider]:self-stretch [&_h1]:text-center [&_h1]:text-xl [&_h1]:font-bold [&_h2]:mt-4 [&_h2]:text-base [&_h2]:font-semibold [&_h3]:mt-3 [&_h3]:text-sm [&_h3]:font-semibold [&_h4]:mt-2 [&_h4]:text-sm [&_h4]:font-semibold [&_p]:my-2 [&_ul]:my-2 [&_ul]:list-inside [&_ul]:list-disc [&_ol]:my-2 [&_ol]:list-inside [&_ol]:list-decimal [&_strong]:font-semibold"
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(result.frontend_report) }}
+            />
+          ) : (
+            <pre className="mt-3 overflow-x-auto rounded bg-slate-900 p-4 text-xs text-slate-100">
+              {JSON.stringify(result, null, 2)}
+            </pre>
+          )}
         </div>
       )}
     </section>

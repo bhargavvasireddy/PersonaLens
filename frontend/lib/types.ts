@@ -18,6 +18,7 @@ export type EvaluationResult = {
   highlights: string[];
   issues: EvaluationIssue[];
   recommendations: string[];
+  frontend_report?: string;
 };
 
 export type Evaluation = {
@@ -31,6 +32,7 @@ export type Evaluation = {
   overall_score: number | null;
   error_message: string | null;
   result_json: EvaluationResult | Record<string, unknown>;
+  frontend_report?: string;
   created_at: string;
 };
 

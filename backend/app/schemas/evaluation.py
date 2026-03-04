@@ -17,6 +17,7 @@ class EvaluationResult(BaseModel):
     highlights: list[str] = Field(default_factory=list)
     issues: list[EvaluationIssue] = Field(default_factory=list)
     recommendations: list[str] = Field(default_factory=list)
+    frontend_report: str = Field(default="", description="HTML report for frontend display.")
 
 
 class EvaluationCreateResponse(BaseModel):
@@ -30,6 +31,7 @@ class EvaluationCreateResponse(BaseModel):
     overall_score: float | None = None
     error_message: str | None = None
     result_json: EvaluationResult | dict[str, object]
+    frontend_report: str = ""
     created_at: datetime
 
 
