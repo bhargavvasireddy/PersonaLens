@@ -1,13 +1,17 @@
 import { CreatePersonaInput, Evaluation, Persona } from "@/lib/types";
+import { supabase } from "@/lib/supabase";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session?.access_token) {
+    headers.set("Authorization", `Bearer ${session.access_token}`);
+  }
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
-    headers: {
-      ...(init?.headers || {})
-    },
+    headers,
     cache: "no-store"
   });
 

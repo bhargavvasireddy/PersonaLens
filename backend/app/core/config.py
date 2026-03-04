@@ -40,8 +40,6 @@ class Settings(BaseSettings):
         if provider == "supabase":
             if not self.supabase_url.strip():
                 raise ValueError("SUPABASE_URL is required when AUTH_PROVIDER=supabase.")
-            if not self.supabase_jwt_secret.strip():
-                raise ValueError("SUPABASE_JWT_SECRET is required when AUTH_PROVIDER=supabase.")
             if not self.supabase_anon_key.strip():
                 raise ValueError("SUPABASE_ANON_KEY is required when AUTH_PROVIDER=supabase.")
         return self

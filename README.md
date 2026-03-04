@@ -2,7 +2,26 @@
 
 PersonaLens is a two-service project:
 - `backend/`: FastAPI + SQLAlchemy + Alembic + Supabase Postgres + OpenAI evaluation + Supabase Auth token validation
-- `frontend/`: Next.js (TypeScript, App Router, Tailwind)
+- `frontend/`: Next.js (TypeScript, App Router, Tailwind) with Supabase Auth in the UI
+
+## Summary of recent changes
+
+- **Frontend auth in the UI**  
+  - Supabase Auth is integrated: users sign in at `/login` (email/password).  
+  - The app sends the Supabase access token on every backend request via `Authorization: Bearer <token>` in `frontend/lib/api.ts`.  
+  - Sidebar shows “Sign in” / “Sign out” and the current user email.
+
+- **Backend JWT verification (ES256 + JWKS)**  
+  - Supabase access tokens are verified with **ES256** using the public key from Supabase’s JWKS endpoint (`{SUPABASE_URL}/auth/v1/.well-known/jwks.json`). No JWT secret needed; JWKS is cached in memory.
+
+- **Frontend env**  
+  - `frontend/.env.local` must include `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` (same Supabase project as the backend).
+
+- **Dev server**  
+  - Frontend `npm run dev` uses Webpack (`--webpack`) to avoid Turbopack/SWC native binary issues on some setups.
+
+- **Cleanup**  
+  - Removed the terminal-only `scripts/get-supabase-token.sh` script; auth is done via the in-app login page.
 
 ## What We Implemented
 
@@ -34,9 +53,11 @@ MODEL_NAME=gpt-4o-mini
 
 AUTH_PROVIDER=supabase
 SUPABASE_URL=https://<project_ref>.supabase.co
-SUPABASE_JWT_SECRET=your_supabase_jwt_secret
+SUPABASE_ANON_KEY=<your_anon_public_key>
 SUPABASE_JWT_AUDIENCE=authenticated
 ```
+
+`SUPABASE_URL` and `SUPABASE_ANON_KEY` are required. The backend verifies tokens with ES256 using the project’s JWKS; no JWT secret is needed.
 
 Use the exact `DATABASE_URL` shown in Supabase Dashboard:
 `Project Settings -> Database -> Connect -> Transaction pooler`.
@@ -83,10 +104,12 @@ npm install
 Copy-Item .env.example .env.local
 ```
 
-`frontend/.env.local`:
+`frontend/.env.local` (use your Supabase project’s URL and anon key):
 
 ```env
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+NEXT_PUBLIC_SUPABASE_URL=https://<project_ref>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<your_anon_public_key>
 ```
 
 ## 4) Run Backend
@@ -135,13 +158,9 @@ All protected calls require:
 Authorization: Bearer <supabase_access_token>
 ```
 
-## 7) Supabase Auth Usage
+## 7) Supabase Auth usage
 
-Sign in with Supabase Auth (frontend SDK or Supabase auth API), get access token, then call backend:
-
-```powershell
-Invoke-RestMethod -Uri "http://localhost:8000/personas" -Method Get -Headers @{ Authorization = "Bearer $token" }
-```
+Sign in via the app: open **http://localhost:3000**, click **Sign in** in the sidebar, and use a user that exists in your Supabase project (Authentication → Users). The frontend sends the access token to the backend automatically. For API testing with curl, sign in via the UI or Supabase Auth API and pass the token: `Authorization: Bearer <access_token>`.
 
 ## 8) Verified Backend Status (March 2, 2026)
 
@@ -176,12 +195,11 @@ Note: AI evaluation success depends on a valid `OPENAI_API_KEY`, model access, a
 3. Uploaded files are saved locally in `backend/uploads`.
 4. Stored in DB: result JSON + metadata; full chat transcript is not separately stored.
 
-## Frontend Going Forward
+## Frontend auth (current)
 
-1. Integrate Supabase Auth UI (signup/login/logout).
-2. Store Supabase session and pass access token to backend API calls.
-3. Add auto refresh via Supabase client session handling.
-4. Protect frontend routes based on session state.
+1. **Supabase Auth** – Login at `/login` (email/password); sign out in the sidebar.
+2. **Token to backend** – `lib/api.ts` gets the session via `supabase.auth.getSession()` and adds `Authorization: Bearer <access_token>` to every request.
+3. **Optional later** – Sign-up page, session refresh, or route protection (redirect to login when unauthenticated).
 
 ## How To Use
 
@@ -192,9 +210,8 @@ Note: AI evaluation success depends on a valid `OPENAI_API_KEY`, model access, a
 5. Use token to create personas and run evaluations.
 6. Review previous feedback.
 
-## What Needs Implementation
+## What may be done next
 
-1. Full frontend Supabase Auth integration.
-2. Per-user ownership filtering in backend (currently token-validated, not row-scoped).
-3. Optional migration of uploads to Supabase Storage.
-4. Optional local auth route cleanup/removal now that Supabase Auth is primary.
+1. Per-user ownership filtering in the backend (currently token-validated, not row-scoped).
+2. Optional migration of uploads to Supabase Storage.
+3. Optional sign-up page and route protection (redirect to login when not signed in).

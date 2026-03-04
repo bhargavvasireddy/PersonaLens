@@ -1,10 +1,23 @@
+import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any
 
 import bcrypt
 import jwt
+from jwt import PyJWKClient
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
+
+_jwk_client: PyJWKClient | None = None
+
+
+def _get_supabase_jwk_client() -> PyJWKClient:
+    global _jwk_client
+    if _jwk_client is None:
+        jwks_url = f"{settings.supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json"
+        _jwk_client = PyJWKClient(jwks_url, cache_jwk_set=True, lifespan=300)
+    return _jwk_client
 
 
 class TokenValidationError(Exception):
@@ -58,12 +71,19 @@ def decode_token(token: str, expected_token_type: str) -> int:
 
 
 def decode_supabase_access_token(token: str) -> AuthenticatedPrincipal:
-    if not settings.supabase_jwt_secret.strip():
-        raise TokenValidationError("SUPABASE_JWT_SECRET is not configured.")
+    if not settings.supabase_url.strip():
+        raise TokenValidationError("SUPABASE_URL is not configured.")
+    unverified = jwt.get_unverified_header(token)
+    if unverified.get("alg") != "ES256":
+        raise TokenValidationError("Supabase access token must use ES256.")
 
-    options = {"verify_aud": bool(settings.supabase_jwt_audience.strip())}
-    decode_kwargs: dict[str, Any] = {}
-    if settings.supabase_jwt_audience.strip():
+    client = _get_supabase_jwk_client()
+    signing_key = client.get_signing_key_from_jwt(token)
+
+    verify_aud = bool(settings.supabase_jwt_audience.strip())
+    options = {"verify_aud": verify_aud}
+    decode_kwargs = {}
+    if verify_aud:
         decode_kwargs["audience"] = settings.supabase_jwt_audience
     if settings.supabase_jwt_issuer:
         decode_kwargs["issuer"] = settings.supabase_jwt_issuer
@@ -71,12 +91,13 @@ def decode_supabase_access_token(token: str) -> AuthenticatedPrincipal:
     try:
         payload = jwt.decode(
             token,
-            settings.supabase_jwt_secret,
-            algorithms=[settings.jwt_algorithm],
+            signing_key.key,
+            algorithms=["ES256"],
             options=options,
             **decode_kwargs,
         )
     except jwt.InvalidTokenError as exc:
+        logger.warning("Supabase JWT verification failed: %s", exc)
         raise TokenValidationError("Invalid Supabase token.") from exc
 
     subject = payload.get("sub")
