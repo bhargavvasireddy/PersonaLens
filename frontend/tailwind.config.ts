@@ -7,12 +7,7 @@ const config: Config = {
     "./lib/**/*.{js,ts,jsx,tsx,mdx}"
   ],
   theme: {
-    extend: {
-      colors: {
-        slateInk: "#0f172a",
-        mist: "#f4f6fa"
-      }
-    }
+    extend: {}
   },
   plugins: []
 };
