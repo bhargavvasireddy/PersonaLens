@@ -1,4 +1,4 @@
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     supabase_jwt_secret: str = Field(default="", alias="SUPABASE_JWT_SECRET")
     supabase_jwt_audience: str = Field(default="authenticated", alias="SUPABASE_JWT_AUDIENCE")
     supabase_url: str = Field(default="", alias="SUPABASE_URL")
+    supabase_anon_key: str = Field(default="", alias="SUPABASE_ANON_KEY")
+    supabase_auth_timeout_seconds: int = Field(default=15, alias="SUPABASE_AUTH_TIMEOUT_SECONDS")
 
     @field_validator("cors_origins")
     @classmethod
@@ -28,6 +30,21 @@ class Settings(BaseSettings):
         if not value.strip():
             return "http://localhost:3000"
         return value
+
+    @model_validator(mode="after")
+    def validate_auth_provider_requirements(self) -> "Settings":
+        provider = self.auth_provider.strip().lower()
+        if provider not in {"local", "supabase"}:
+            raise ValueError("AUTH_PROVIDER must be either 'local' or 'supabase'.")
+
+        if provider == "supabase":
+            if not self.supabase_url.strip():
+                raise ValueError("SUPABASE_URL is required when AUTH_PROVIDER=supabase.")
+            if not self.supabase_jwt_secret.strip():
+                raise ValueError("SUPABASE_JWT_SECRET is required when AUTH_PROVIDER=supabase.")
+            if not self.supabase_anon_key.strip():
+                raise ValueError("SUPABASE_ANON_KEY is required when AUTH_PROVIDER=supabase.")
+        return self
 
     @property
     def cors_origins_list(self) -> list[str]:
