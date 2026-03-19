@@ -6,7 +6,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_owner_user_id
 from app.core.config import settings
 from app.core.security import AuthenticatedPrincipal
 from app.db import models
@@ -18,7 +18,7 @@ router = APIRouter(tags=["evaluations"])
 logger = logging.getLogger(__name__)
 
 
-def _serialize_evaluation(evaluation: models.Evaluation, db: Session) -> EvaluationRead:
+def _serialize_evaluation(evaluation: models.Evaluation, db: Session, owner_user_id: str) -> EvaluationRead:
     parsed_result: EvaluationResult | dict[str, object] = {}
     try:
         parsed = json.loads(evaluation.result_json)
@@ -30,10 +30,18 @@ def _serialize_evaluation(evaluation: models.Evaluation, db: Session) -> Evaluat
     except json.JSONDecodeError:
         parsed_result = {"raw": evaluation.result_json}
 
-    primary_persona = db.get(models.Persona, evaluation.primary_persona_id)
-    compare_persona = (
-        db.get(models.Persona, evaluation.compare_persona_id) if evaluation.compare_persona_id is not None else None
+    primary_persona = (
+        db.query(models.Persona)
+        .filter(models.Persona.id == evaluation.primary_persona_id, models.Persona.owner_user_id == owner_user_id)
+        .first()
     )
+    compare_persona = None
+    if evaluation.compare_persona_id is not None:
+        compare_persona = (
+            db.query(models.Persona)
+            .filter(models.Persona.id == evaluation.compare_persona_id, models.Persona.owner_user_id == owner_user_id)
+            .first()
+        )
 
     frontend_report = ""
     if isinstance(parsed_result, EvaluationResult):
@@ -65,8 +73,10 @@ def create_evaluation(
     primary_persona_id: str | None = Form(default=None),
     compare_persona_id: str | None = Form(default=None),
     db: Session = Depends(get_db),
-    _: models.User | AuthenticatedPrincipal = Depends(get_current_user),
+    current_user: models.User | AuthenticatedPrincipal = Depends(get_current_user),
 ) -> EvaluationRead:
+    owner_user_id = get_owner_user_id(current_user)
+
     if image is None:
         raise HTTPException(status_code=400, detail="Image file is required.")
     if primary_persona_id is None or not primary_persona_id.strip():
@@ -76,7 +86,11 @@ def create_evaluation(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="primary_persona_id must be an integer.") from exc
 
-    primary_persona = db.get(models.Persona, primary_persona_id_value)
+    primary_persona = (
+        db.query(models.Persona)
+        .filter(models.Persona.id == primary_persona_id_value, models.Persona.owner_user_id == owner_user_id)
+        .first()
+    )
     if primary_persona is None:
         raise HTTPException(status_code=400, detail="Primary persona not found.")
 
@@ -87,7 +101,11 @@ def create_evaluation(
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="compare_persona_id must be an integer.") from exc
 
-        compare_persona = db.get(models.Persona, compare_persona_id_value)
+        compare_persona = (
+            db.query(models.Persona)
+            .filter(models.Persona.id == compare_persona_id_value, models.Persona.owner_user_id == owner_user_id)
+            .first()
+        )
         if compare_persona is None:
             raise HTTPException(status_code=400, detail="Compare persona not found.")
     else:
@@ -113,6 +131,7 @@ def create_evaluation(
         )
         logger.info("AI returned OK")
         evaluation = models.Evaluation(
+            owner_user_id=owner_user_id,
             image_path=str(target_path),
             primary_persona_id=primary_persona_id_value,
             compare_persona_id=compare_persona_id_value,
@@ -125,10 +144,11 @@ def create_evaluation(
         db.commit()
         db.refresh(evaluation)
         logger.info("Saved evaluation id=%s to DB", evaluation.id)
-        return _serialize_evaluation(evaluation, db)
+        return _serialize_evaluation(evaluation, db, owner_user_id)
     except AIModelCallError as exc:
         logger.exception("AI evaluation failed: %s", exc)
         failed_evaluation = models.Evaluation(
+            owner_user_id=owner_user_id,
             image_path=str(target_path),
             primary_persona_id=primary_persona_id_value,
             compare_persona_id=compare_persona_id_value,
@@ -145,6 +165,7 @@ def create_evaluation(
     except AIInvalidJSONError as exc:
         logger.exception("AI returned invalid JSON: %s", exc)
         failed_evaluation = models.Evaluation(
+            owner_user_id=owner_user_id,
             image_path=str(target_path),
             primary_persona_id=primary_persona_id_value,
             compare_persona_id=compare_persona_id_value,
@@ -163,7 +184,13 @@ def create_evaluation(
 @router.get("/evaluations", response_model=list[EvaluationRead])
 def list_evaluations(
     db: Session = Depends(get_db),
-    _: models.User | AuthenticatedPrincipal = Depends(get_current_user),
+    current_user: models.User | AuthenticatedPrincipal = Depends(get_current_user),
 ) -> list[EvaluationRead]:
-    rows = db.query(models.Evaluation).order_by(models.Evaluation.created_at.desc()).all()
-    return [_serialize_evaluation(row, db) for row in rows]
+    owner_user_id = get_owner_user_id(current_user)
+    rows = (
+        db.query(models.Evaluation)
+        .filter(models.Evaluation.owner_user_id == owner_user_id)
+        .order_by(models.Evaluation.created_at.desc())
+        .all()
+    )
+    return [_serialize_evaluation(row, db, owner_user_id) for row in rows]

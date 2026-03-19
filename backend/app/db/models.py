@@ -14,6 +14,7 @@ class Persona(Base):
     __tablename__ = "personas"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    owner_user_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, default="", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
@@ -34,6 +35,7 @@ class Evaluation(Base):
     __tablename__ = "evaluations"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    owner_user_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     image_path: Mapped[str] = mapped_column(String(512), nullable=False)
     primary_persona_id: Mapped[int] = mapped_column(ForeignKey("personas.id"), nullable=False)
     compare_persona_id: Mapped[int | None] = mapped_column(ForeignKey("personas.id"), nullable=True)

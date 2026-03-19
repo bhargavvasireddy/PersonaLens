@@ -24,6 +24,8 @@ export default function LoginPage() {
       }
       router.push("/ui-analysis");
       router.refresh();
+    } catch {
+      setError("Unable to reach Supabase Auth. Check frontend env keys and internet access.");
     } finally {
       setLoading(false);
     }

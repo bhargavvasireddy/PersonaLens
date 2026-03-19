@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
-    cors_origins: str = Field(default="http://localhost:3000", alias="CORS_ORIGINS")
+    cors_origins: str = Field(default="http://localhost:3000,http://127.0.0.1:3000", alias="CORS_ORIGINS")
     database_url: str = Field(
         default="postgresql+psycopg://postgres:your_password@db.your-project-ref.supabase.co:5432/postgres?sslmode=require",
         alias="DATABASE_URL",
@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     @classmethod
     def validate_cors_origins(cls, value: str) -> str:
         if not value.strip():
-            return "http://localhost:3000"
+            return "http://localhost:3000,http://127.0.0.1:3000"
         return value
 
     @model_validator(mode="after")

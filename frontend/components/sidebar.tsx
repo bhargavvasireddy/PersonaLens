@@ -60,7 +60,20 @@ export function Sidebar() {
   const [session, setSession] = useState<Session | null>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
+    supabase.auth
+      .getSession()
+      .then(({ data: { session }, error }) => {
+        if (error) {
+          console.error("Unable to read Supabase session:", error.message);
+          setSession(null);
+          return;
+        }
+        setSession(session);
+      })
+      .catch((error) => {
+        console.error("Supabase session check failed:", error);
+        setSession(null);
+      });
     const {
       data: { subscription }
     } = supabase.auth.onAuthStateChange((_event, session) => {

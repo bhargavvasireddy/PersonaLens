@@ -3,17 +3,43 @@ import { supabase } from "@/lib/supabase";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
+async function getAccessToken(): Promise<string | null> {
+  try {
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession();
+
+    if (error) {
+      console.error("Unable to load Supabase session:", error.message);
+      return null;
+    }
+    return session?.access_token ?? null;
+  } catch (error) {
+    console.error("Unexpected Supabase session error:", error);
+    return null;
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
-  const { data: { session } } = await supabase.auth.getSession();
-  if (session?.access_token) {
-    headers.set("Authorization", `Bearer ${session.access_token}`);
+  const accessToken = await getAccessToken();
+  if (accessToken) {
+    headers.set("Authorization", `Bearer ${accessToken}`);
   }
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers,
-    cache: "no-store"
-  });
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      headers,
+      cache: "no-store"
+    });
+  } catch {
+    throw new Error(
+      "Failed to reach backend API. Verify backend is running on port 8000 and CORS includes your frontend origin."
+    );
+  }
 
   if (!response.ok) {
     let detail = `Request failed with status ${response.status}`;
@@ -23,7 +49,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         detail = body.detail;
       }
     } catch {
-      // Keep fallback detail when JSON parsing fails.
+      const textBody = await response.text().catch(() => "");
+      if (textBody) {
+        detail = textBody;
+      }
     }
     throw new Error(detail);
   }

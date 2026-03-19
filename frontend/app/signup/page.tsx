@@ -33,6 +33,8 @@ export default function SignupPage() {
         return;
       }
       setSuccess(true);
+    } catch {
+      setError("Unable to reach Supabase Auth. Check frontend env keys and internet access.");
     } finally {
       setLoading(false);
     }

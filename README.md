@@ -15,7 +15,7 @@ PersonaLens is a two-service project:
   - Supabase access tokens are verified with **ES256** using the public key from Supabase’s JWKS endpoint (`{SUPABASE_URL}/auth/v1/.well-known/jwks.json`). No JWT secret needed; JWKS is cached in memory.
 
 - **Frontend env**  
-  - `frontend/.env.local` must include `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` (same Supabase project as the backend).
+  - `frontend/.env` must include `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` (same Supabase project as the backend).
 
 - **Dev server**  
   - Frontend `npm run dev` uses Webpack (`--webpack`) to avoid Turbopack/SWC native binary issues on some setups.
@@ -28,8 +28,9 @@ PersonaLens is a two-service project:
 1. Backend validates Supabase access tokens for protected routes.
 2. Core data routes are protected (`/personas`, `/evaluate`, `/evaluations`).
 3. Database is on Supabase Postgres with Alembic migrations.
-4. AI evaluation is real (OpenAI call) and persisted in DB.
-5. Upload files are currently saved locally in `backend/uploads`.
+4. Persona and evaluation data is owner-scoped per authenticated user.
+5. AI evaluation is real (OpenAI call) and persisted in DB.
+6. Upload files are currently saved locally in `backend/uploads`.
 
 ## Install First
 
@@ -44,7 +45,7 @@ PersonaLens is a two-service project:
 Set `backend/.env` with:
 
 ```env
-CORS_ORIGINS=http://localhost:3000
+CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 DATABASE_URL=postgresql://postgres.<project_ref>:<URL_ENCODED_DB_PASSWORD>@<region-pooler-host>.pooler.supabase.com:6543/postgres?sslmode=require
 UPLOAD_DIR=./uploads
 
@@ -96,15 +97,18 @@ Run migrations:
 alembic upgrade head
 ```
 
+Latest migration required for per-user ownership:
+- `20260319_0002_add_owner_scope`
+
 ## 3) Frontend Setup
 
 ```powershell
 cd frontend
 npm install
-Copy-Item .env.example .env.local
+Copy-Item .env.example .env
 ```
 
-`frontend/.env.local` (use your Supabase project’s URL and anon key):
+`frontend/.env` (use your Supabase project’s URL and anon key):
 
 ```env
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
@@ -212,6 +216,5 @@ Note: AI evaluation success depends on a valid `OPENAI_API_KEY`, model access, a
 
 ## What may be done next
 
-1. Per-user ownership filtering in the backend (currently token-validated, not row-scoped).
-2. Optional migration of uploads to Supabase Storage.
-3. Optional sign-up page and route protection (redirect to login when not signed in).
+1. Optional migration of uploads to Supabase Storage.
+2. Optional sign-up page and route protection (redirect to login when not signed in).

@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 import bcrypt
 import jwt
 from jwt import PyJWKClient
+from jwt.exceptions import MissingCryptographyError, PyJWKClientError
 
 from app.core.config import settings
 
@@ -73,12 +74,19 @@ def decode_token(token: str, expected_token_type: str) -> int:
 def decode_supabase_access_token(token: str) -> AuthenticatedPrincipal:
     if not settings.supabase_url.strip():
         raise TokenValidationError("SUPABASE_URL is not configured.")
-    unverified = jwt.get_unverified_header(token)
-    if unverified.get("alg") != "ES256":
-        raise TokenValidationError("Supabase access token must use ES256.")
+    try:
+        unverified = jwt.get_unverified_header(token)
+        if unverified.get("alg") != "ES256":
+            raise TokenValidationError("Supabase access token must use ES256.")
 
-    client = _get_supabase_jwk_client()
-    signing_key = client.get_signing_key_from_jwt(token)
+        client = _get_supabase_jwk_client()
+        signing_key = client.get_signing_key_from_jwt(token)
+    except MissingCryptographyError as exc:
+        logger.error("Missing dependency for ES256 verification: %s", exc)
+        raise TokenValidationError("Server is missing JWT crypto dependency.") from exc
+    except (jwt.InvalidTokenError, PyJWKClientError) as exc:
+        logger.warning("Supabase JWT header/key resolution failed: %s", exc)
+        raise TokenValidationError("Invalid Supabase token.") from exc
 
     verify_aud = bool(settings.supabase_jwt_audience.strip())
     options = {"verify_aud": verify_aud}

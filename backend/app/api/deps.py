@@ -31,3 +31,9 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     if user is None or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive.")
     return user
+
+
+def get_owner_user_id(current_user: models.User | AuthenticatedPrincipal) -> str:
+    if isinstance(current_user, AuthenticatedPrincipal):
+        return f"supabase:{current_user.subject}"
+    return f"local:{current_user.id}"
