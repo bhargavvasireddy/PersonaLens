@@ -126,7 +126,7 @@ export default function PreviousFeedbackPage() {
   }, []);
 
   return (
-    <section className="max-w-4xl space-y-6">
+    <section className="mx-auto w-full max-w-7xl space-y-6">
       <header>
         <h2 className="text-2xl font-bold text-slate-900">Previous Feedback</h2>
         <p className="mt-1 text-sm text-slate-500">Review all past UI evaluation runs.</p>

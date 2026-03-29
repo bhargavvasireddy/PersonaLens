@@ -76,7 +76,7 @@ def _build_prompt(primary_persona: Persona, compare_persona: Persona | None) -> 
         evaluation_instruction = "Evaluate this UI screenshot from the perspective of this persona."
         report_instruction = (
             "frontend_report must be a single string containing **only HTML** (no markdown). "
-            "Use HTML for structure and formatting: <h1><strong>Persona Name</strong></h1> at the top, "
+            f"Use HTML for structure and formatting: <h1><strong>{primary_persona.name}</strong></h1> at the top, "
             "<h2> for section headers, <h3> or <h4> for subsections, <p> for paragraphs, <strong> for emphasis, "
             "<ul><li> or <ol><li> for lists. The frontend_report **must include every important field from the JSON**: the **overall_score** (show the numeric score), **summary**, all **highlights**, all **issues** (each with title, description, severity, category), and all **recommendations**. Do not omit any of these. "
             "End with a brief summary section. Escape quotes in attributes as \\\" in the JSON string."

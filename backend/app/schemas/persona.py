@@ -8,6 +8,11 @@ class PersonaCreate(BaseModel):
     description: str = ""
 
 
+class PersonaUpdate(BaseModel):
+    name: str
+    description: str = ""
+
+
 class PersonaRead(BaseModel):
     id: int
     name: str

@@ -1,6 +1,6 @@
 export default function SettingsPage() {
   return (
-    <section className="max-w-2xl space-y-8">
+    <section className="mx-auto w-full max-w-4xl space-y-8">
       <header>
         <h2 className="text-2xl font-bold text-slate-900">Settings</h2>
         <p className="mt-1 text-sm text-slate-500">Manage your workspace preferences and configuration.</p>

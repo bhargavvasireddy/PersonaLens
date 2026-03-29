@@ -57,6 +57,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(detail);
   }
 
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
   return response.json() as Promise<T>;
 }
 
@@ -71,6 +75,22 @@ export function createPersona(payload: CreatePersonaInput) {
       "Content-Type": "application/json"
     },
     body: JSON.stringify(payload)
+  });
+}
+
+export function updatePersona(personaId: number, payload: CreatePersonaInput) {
+  return request<Persona>(`/personas/${personaId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+}
+
+export function deletePersona(personaId: number) {
+  return request<void>(`/personas/${personaId}`, {
+    method: "DELETE"
   });
 }
 

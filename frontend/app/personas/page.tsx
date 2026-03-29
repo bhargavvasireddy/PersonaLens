@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { createPersona, getPersonas } from "@/lib/api";
+import { createPersona, deletePersona, getEvaluations, getPersonas, updatePersona } from "@/lib/api";
 import { Persona } from "@/lib/types";
 import { useAuthGuard } from "@/lib/use-auth-guard";
 
@@ -10,6 +10,12 @@ export default function PersonasPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showModal, setShowModal] = useState(false);
+  const [editingPersona, setEditingPersona] = useState<Persona | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Persona | null>(null);
+  const [deleteEvalCount, setDeleteEvalCount] = useState<number | null>(null);
+  const [deleteCountLoading, setDeleteCountLoading] = useState(false);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   useAuthGuard();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -23,7 +29,49 @@ export default function PersonasPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  async function onCreatePersona(event: FormEvent<HTMLFormElement>) {
+  useEffect(() => {
+    if (!editingPersona) {
+      return;
+    }
+    setName(editingPersona.name);
+    setDescription(editingPersona.description);
+  }, [editingPersona]);
+
+  useEffect(() => {
+    if (!deleteTarget) {
+      setDeleteEvalCount(null);
+      setDeleteError("");
+      return;
+    }
+    let cancelled = false;
+    setDeleteCountLoading(true);
+    setDeleteEvalCount(null);
+    getEvaluations()
+      .then((evaluations) => {
+        if (cancelled) {
+          return;
+        }
+        const n = evaluations.filter(
+          (e) => e.primary_persona_id === deleteTarget.id || e.compare_persona_id === deleteTarget.id
+        ).length;
+        setDeleteEvalCount(n);
+      })
+      .catch((err: Error) => {
+        if (!cancelled) {
+          setDeleteError(err.message);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setDeleteCountLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [deleteTarget]);
+
+  async function onSubmitPersona(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitError("");
 
@@ -35,13 +83,22 @@ export default function PersonasPage() {
 
     setSubmitting(true);
     try {
-      const created = await createPersona({ name: trimmedName, description: description.trim() });
-      setPersonas((prev) => [created, ...prev]);
+      const payload = { name: trimmedName, description: description.trim() };
+      if (editingPersona) {
+        const updated = await updatePersona(editingPersona.id, payload);
+        setPersonas((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+        setEditingPersona(null);
+      } else {
+        const created = await createPersona(payload);
+        setPersonas((prev) => [created, ...prev]);
+        setShowModal(false);
+      }
       setName("");
       setDescription("");
-      setShowModal(false);
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : "Unable to create persona.");
+      setSubmitError(
+        err instanceof Error ? err.message : editingPersona ? "Unable to save persona." : "Unable to create persona."
+      );
     } finally {
       setSubmitting(false);
     }
@@ -52,10 +109,28 @@ export default function PersonasPage() {
     setName("");
     setDescription("");
     setShowModal(false);
+    setEditingPersona(null);
+  }
+
+  async function onConfirmDelete() {
+    if (!deleteTarget) {
+      return;
+    }
+    setDeleteError("");
+    setDeleteSubmitting(true);
+    try {
+      await deletePersona(deleteTarget.id);
+      setPersonas((prev) => prev.filter((p) => p.id !== deleteTarget.id));
+      setDeleteTarget(null);
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Unable to delete persona.");
+    } finally {
+      setDeleteSubmitting(false);
+    }
   }
 
   return (
-    <section className="max-w-4xl space-y-6">
+    <section className="mx-auto w-full max-w-7xl space-y-6">
       <header className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Personas</h2>
@@ -63,7 +138,13 @@ export default function PersonasPage() {
         </div>
         <button
           type="button"
-          onClick={() => setShowModal(true)}
+          onClick={() => {
+            setEditingPersona(null);
+            setName("");
+            setDescription("");
+            setSubmitError("");
+            setShowModal(true);
+          }}
           className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 outline-none"
         >
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
@@ -111,8 +192,14 @@ export default function PersonasPage() {
             </div>
             <button
               type="button"
-              onClick={() => setShowModal(true)}
-              className="mt-1 rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              onClick={() => {
+                setEditingPersona(null);
+                setName("");
+                setDescription("");
+                setSubmitError("");
+                setShowModal(true);
+              }}
+              className="mt-1 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
             >
               Add persona
             </button>
@@ -124,6 +211,7 @@ export default function PersonasPage() {
                 <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Name</th>
                 <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Description</th>
                 <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Created</th>
+                <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -140,6 +228,27 @@ export default function PersonasPage() {
                       year: "numeric"
                     })}
                   </td>
+                  <td className="whitespace-nowrap px-5 py-3.5 text-right">
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowModal(false);
+                          setEditingPersona(persona);
+                        }}
+                        className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeleteTarget(persona)}
+                        className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -147,15 +256,15 @@ export default function PersonasPage() {
         )}
       </div>
 
-      {/* Modal */}
-      {showModal && (
+      {/* Create / edit modal */}
+      {(showModal || editingPersona) && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
           onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
         >
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
             <div className="flex items-center justify-between mb-5">
-              <h3 className="text-base font-semibold text-slate-900">Add Persona</h3>
+              <h3 className="text-base font-semibold text-slate-900">{editingPersona ? "Edit Persona" : "Add Persona"}</h3>
               <button
                 type="button"
                 onClick={closeModal}
@@ -167,7 +276,7 @@ export default function PersonasPage() {
                 </svg>
               </button>
             </div>
-            <form onSubmit={onCreatePersona} className="space-y-4">
+            <form onSubmit={onSubmitPersona} className="space-y-4">
               <div>
                 <label htmlFor="persona-name" className="block text-sm font-medium text-slate-700 mb-1.5">
                   Name <span className="text-red-400">*</span>
@@ -211,7 +320,7 @@ export default function PersonasPage() {
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 outline-none"
+                  className="rounded-lg bg-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
                 >
                   Cancel
                 </button>
@@ -220,10 +329,66 @@ export default function PersonasPage() {
                   disabled={submitting}
                   className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-60 outline-none"
                 >
-                  {submitting ? "Saving…" : "Save Persona"}
+                  {submitting ? "Saving…" : editingPersona ? "Save changes" : "Save Persona"}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation */}
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !deleteSubmitting) {
+              setDeleteTarget(null);
+            }
+          }}
+        >
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="text-base font-semibold text-slate-900">Delete persona?</h3>
+            <p className="mt-3 text-sm text-slate-600">
+              You are about to remove <span className="font-semibold text-slate-800">{deleteTarget.name}</span>. This cannot be undone.
+            </p>
+            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm text-amber-950">
+              {deleteCountLoading ? (
+                <span className="text-amber-900/80">Checking linked evaluations…</span>
+              ) : deleteEvalCount !== null && deleteEvalCount > 0 ? (
+                <>
+                  <strong className="font-semibold">All UI evaluations that use this persona will be permanently deleted.</strong>
+                  <span className="mt-1 block text-amber-900/90">
+                    This includes {deleteEvalCount === 1 ? "1 evaluation" : `${deleteEvalCount} evaluations`} where this persona is the primary or comparison persona.
+                  </span>
+                </>
+              ) : deleteEvalCount === 0 ? (
+                <span>No existing evaluations reference this persona.</span>
+              ) : (
+                <span>Could not load evaluation count; deleting will still remove any evaluations tied to this persona.</span>
+              )}
+            </div>
+            {deleteError && (
+              <p className="mt-3 text-sm text-red-600">{deleteError}</p>
+            )}
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={deleteSubmitting}
+                onClick={() => setDeleteTarget(null)}
+                className="rounded-lg bg-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteSubmitting || deleteCountLoading}
+                onClick={onConfirmDelete}
+                className="rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700 disabled:opacity-60"
+              >
+                {deleteSubmitting ? "Deleting…" : "Delete persona"}
+              </button>
+            </div>
           </div>
         </div>
       )}

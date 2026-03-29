@@ -54,10 +54,36 @@ const navItems = [
   }
 ];
 
+const SIDEBAR_COLLAPSED_KEY = "personaLens.sidebarCollapsed";
+
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+      if (stored === "1") {
+        setCollapsed(true);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  function toggleCollapsed() {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }
 
   useEffect(() => {
     supabase.auth
@@ -94,84 +120,119 @@ export function Sidebar() {
   if (pathname === "/login" || pathname === "/signup") return null;
 
   return (
-    <aside className="flex w-64 shrink-0 flex-col border-r border-slate-200 bg-slate-50">
-      {/* Logo / Brand */}
-      <div className="flex items-center gap-2.5 px-5 py-5 border-b border-slate-100">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-            <circle cx="11" cy="11" r="7" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-        </div>
-        <div>
-          <h1 className="text-sm font-bold tracking-tight text-slate-900">PersonaLens</h1>
-          <p className="text-[11px] text-slate-400 leading-none mt-0.5">UI Evaluation</p>
-        </div>
-      </div>
-
-      {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5">
-        {navItems.map((item) => {
-          const active = pathname === item.href;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={[
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                active
-                  ? "bg-indigo-50 text-indigo-700"
-                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-              ].join(" ")}
-            >
-              <span className={active ? "text-indigo-600" : "text-slate-400"}>
-                {item.icon}
-              </span>
-              {item.label}
-            </Link>
-          );
-        })}
-      </nav>
-
-      {/* User / Auth section */}
-      <div className="border-t border-slate-100 px-3 py-3">
-        {session ? (
-          <div className="space-y-1">
-            <div className="flex items-center gap-2.5 px-3 py-2">
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold uppercase">
-                {session.user.email?.[0] ?? "?"}
-              </div>
-              <p className="truncate text-xs text-slate-600 min-w-0" title={session.user.email ?? undefined}>
-                {session.user.email}
-              </p>
+    <>
+      <aside
+        className={[
+          "flex shrink-0 flex-col border-r border-slate-200 bg-slate-50 transition-[width] duration-200 ease-out overflow-hidden",
+          collapsed ? "w-0" : "w-64"
+        ].join(" ")}
+        aria-hidden={collapsed}
+      >
+        <div className="flex min-h-screen w-64 flex-col">
+          {/* Logo / Brand */}
+          <div className="flex items-center gap-2.5 px-5 py-5 border-b border-slate-100">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                <circle cx="11" cy="11" r="7" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+            </div>
+            <div className="min-w-0 flex-1">
+              <h1 className="text-sm font-bold tracking-tight text-slate-900">PersonaLens</h1>
+              <p className="text-[11px] text-slate-400 leading-none mt-0.5">UI Evaluation</p>
             </div>
             <button
               type="button"
-              onClick={signOut}
-              className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700"
+              onClick={toggleCollapsed}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-indigo-600 bg-white text-indigo-600 shadow-sm transition hover:bg-indigo-50 hover:text-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+              title="Hide sidebar"
+              aria-label="Hide sidebar"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 shrink-0">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                <polyline points="16 17 21 12 16 7" />
-                <line x1="21" y1="12" x2="9" y2="12" />
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                <polyline points="15 18 9 12 15 6" />
               </svg>
-              Sign out
             </button>
           </div>
-        ) : (
-          <Link
-            href="/login"
-            className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 shrink-0 text-slate-400">
-              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
-              <polyline points="10 17 15 12 10 7" />
-              <line x1="15" y1="12" x2="3" y2="12" />
-            </svg>
-            Sign in
-          </Link>
-        )}
-      </div>
-    </aside>
+
+          {/* Navigation */}
+          <nav className="flex-1 px-3 py-4 space-y-0.5">
+            {navItems.map((item) => {
+              const active = pathname === item.href;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={[
+                    "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                    active
+                      ? "bg-indigo-50 text-indigo-700"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                  ].join(" ")}
+                >
+                  <span className={active ? "text-indigo-600" : "text-slate-400"}>
+                    {item.icon}
+                  </span>
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* User / Auth section */}
+          <div className="border-t border-slate-100 px-3 py-3">
+            {session ? (
+              <div className="space-y-1">
+                <div className="flex items-center gap-2.5 px-3 py-2">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold uppercase">
+                    {session.user.email?.[0] ?? "?"}
+                  </div>
+                  <p className="truncate text-xs text-slate-600 min-w-0" title={session.user.email ?? undefined}>
+                    {session.user.email}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={signOut}
+                  className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 shrink-0">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                    <polyline points="16 17 21 12 16 7" />
+                    <line x1="21" y1="12" x2="9" y2="12" />
+                  </svg>
+                  Sign out
+                </button>
+              </div>
+            ) : (
+              <Link
+                href="/login"
+                className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 shrink-0 text-slate-400">
+                  <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+                  <polyline points="10 17 15 12 10 7" />
+                  <line x1="15" y1="12" x2="3" y2="12" />
+                </svg>
+                Sign in
+              </Link>
+            )}
+          </div>
+        </div>
+      </aside>
+
+      {collapsed && (
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          className="fixed left-0 top-24 z-40 flex h-11 w-11 items-center justify-center rounded-r-xl bg-indigo-600 text-white shadow-lg shadow-indigo-900/25 ring-2 ring-indigo-500/40 transition hover:bg-indigo-700 hover:ring-indigo-400/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2"
+          title="Show sidebar"
+          aria-label="Show sidebar"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </button>
+      )}
+    </>
   );
 }
