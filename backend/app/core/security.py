@@ -1,7 +1,9 @@
 import logging
+import ssl
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
+import certifi
 import jwt
 from jwt import PyJWKClient
 from jwt.exceptions import MissingCryptographyError, PyJWKClientError
@@ -11,13 +13,29 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 _jwk_client: PyJWKClient | None = None
+_jwk_ssl_context: ssl.SSLContext | None = None
+
+
+def _get_jwk_ssl_context() -> ssl.SSLContext:
+    global _jwk_ssl_context
+    if _jwk_ssl_context is None:
+        # Python installations on macOS can have an incomplete default CA store.
+        # Using certifi keeps JWKS fetches fast and reliable for Supabase token checks.
+        _jwk_ssl_context = ssl.create_default_context(cafile=certifi.where())
+    return _jwk_ssl_context
 
 
 def _get_supabase_jwk_client() -> PyJWKClient:
     global _jwk_client
     if _jwk_client is None:
         jwks_url = f"{settings.supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json"
-        _jwk_client = PyJWKClient(jwks_url, cache_jwk_set=True, lifespan=300)
+        _jwk_client = PyJWKClient(
+            jwks_url,
+            cache_jwk_set=True,
+            lifespan=300,
+            timeout=settings.supabase_auth_timeout_seconds,
+            ssl_context=_get_jwk_ssl_context(),
+        )
     return _jwk_client
 
 

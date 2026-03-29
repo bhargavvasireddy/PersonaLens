@@ -101,7 +101,12 @@ export function createEvaluation(formData: FormData) {
   });
 }
 
-export function getEvaluations() {
-  return request<Evaluation[]>("/evaluations");
-}
+export function getEvaluations(personaId?: number) {
+  const searchParams = new URLSearchParams();
+  if (personaId !== undefined) {
+    searchParams.set("persona_id", String(personaId));
+  }
 
+  const query = searchParams.size > 0 ? `?${searchParams.toString()}` : "";
+  return request<Evaluation[]>(`/evaluations${query}`);
+}

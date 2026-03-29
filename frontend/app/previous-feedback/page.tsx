@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import DOMPurify from "dompurify";
-import { getEvaluations } from "@/lib/api";
+import { getEvaluations, getPersonas } from "@/lib/api";
 import { clampScore, formatScoreWithMax } from "@/lib/evaluation-score";
-import { Evaluation, EvaluationResult } from "@/lib/types";
+import { Evaluation, EvaluationResult, Persona } from "@/lib/types";
 import { useAuthGuard } from "@/lib/use-auth-guard";
 
 function isStructuredResult(r: unknown): r is EvaluationResult {
@@ -117,17 +117,62 @@ function StructuredResult({ result }: { result: EvaluationResult }) {
 }
 
 export default function PreviousFeedbackPage() {
+  const [personas, setPersonas] = useState<Persona[]>([]);
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
+  const [selectedPersonaId, setSelectedPersonaId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   useAuthGuard();
 
   useEffect(() => {
-    getEvaluations()
-      .then(setEvaluations)
-      .catch((err: Error) => setError(err.message))
-      .finally(() => setLoading(false));
+    let cancelled = false;
+
+    getPersonas()
+      .then((rows) => {
+        if (!cancelled) {
+          setPersonas(rows);
+        }
+      })
+      .catch((err: Error) => {
+        if (!cancelled) {
+          setError(err.message);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    setLoading(true);
+    setError("");
+    getEvaluations(selectedPersonaId ? Number(selectedPersonaId) : undefined)
+      .then((rows) => {
+        if (!cancelled) {
+          setEvaluations(rows);
+        }
+      })
+      .catch((err: Error) => {
+        if (!cancelled) {
+          setError(err.message);
+          setEvaluations([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedPersonaId]);
+
+  const selectedPersona = personas.find((persona) => String(persona.id) === selectedPersonaId) ?? null;
 
   return (
     <section className="mx-auto w-full max-w-7xl space-y-6">
@@ -137,6 +182,35 @@ export default function PreviousFeedbackPage() {
         <div className="mt-5 border-b border-slate-200" />
       </header>
 
+      <div className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-1">
+          <p className="text-sm font-semibold text-slate-900">Filter by persona</p>
+          <p className="text-xs text-slate-500">
+            {selectedPersona
+              ? `Showing evaluations where ${selectedPersona.name} was the primary or comparison persona.`
+              : "Showing evaluations across all personas."}
+          </p>
+        </div>
+        <div className="flex flex-col gap-2 sm:min-w-72">
+          <label htmlFor="persona-filter" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Persona
+          </label>
+          <select
+            id="persona-filter"
+            value={selectedPersonaId}
+            onChange={(event) => setSelectedPersonaId(event.target.value)}
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none"
+          >
+            <option value="">All personas</option>
+            {personas.map((persona) => (
+              <option key={persona.id} value={persona.id}>
+                {persona.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       {error && (
         <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 h-4 w-4 shrink-0">
@@ -145,6 +219,23 @@ export default function PreviousFeedbackPage() {
             <line x1="12" y1="16" x2="12.01" y2="16" />
           </svg>
           {error}
+        </div>
+      )}
+
+      {!loading && !error && (
+        <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          <span>
+            {evaluations.length} evaluation{evaluations.length === 1 ? "" : "s"}
+          </span>
+          {selectedPersona && (
+            <button
+              type="button"
+              onClick={() => setSelectedPersonaId("")}
+              className="rounded-md px-2.5 py-1 font-medium text-indigo-600 transition hover:bg-indigo-50 hover:text-indigo-700"
+            >
+              Clear filter
+            </button>
+          )}
         </div>
       )}
 
@@ -169,8 +260,14 @@ export default function PreviousFeedbackPage() {
             </svg>
           </div>
           <div>
-            <p className="text-sm font-medium text-slate-700">No evaluations yet</p>
-            <p className="mt-0.5 text-xs text-slate-400">Run a UI analysis to see results here.</p>
+            <p className="text-sm font-medium text-slate-700">
+              {selectedPersona ? "No evaluations match this persona" : "No evaluations yet"}
+            </p>
+            <p className="mt-0.5 text-xs text-slate-400">
+              {selectedPersona
+                ? "Try another persona or clear the filter to see all results."
+                : "Run a UI analysis to see results here."}
+            </p>
           </div>
         </div>
       )}

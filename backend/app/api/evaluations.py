@@ -3,7 +3,8 @@ import logging
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_owner_user_id
@@ -183,14 +184,28 @@ def create_evaluation(
 
 @router.get("/evaluations", response_model=list[EvaluationRead])
 def list_evaluations(
+    persona_id: int | None = Query(default=None, ge=1),
     db: Session = Depends(get_db),
     current_user: models.User | AuthenticatedPrincipal = Depends(get_current_user),
 ) -> list[EvaluationRead]:
     owner_user_id = get_owner_user_id(current_user)
-    rows = (
-        db.query(models.Evaluation)
-        .filter(models.Evaluation.owner_user_id == owner_user_id)
-        .order_by(models.Evaluation.created_at.desc())
-        .all()
-    )
+
+    query = db.query(models.Evaluation).filter(models.Evaluation.owner_user_id == owner_user_id)
+    if persona_id is not None:
+        persona = (
+            db.query(models.Persona)
+            .filter(models.Persona.id == persona_id, models.Persona.owner_user_id == owner_user_id)
+            .first()
+        )
+        if persona is None:
+            raise HTTPException(status_code=404, detail="Persona not found.")
+
+        query = query.filter(
+            or_(
+                models.Evaluation.primary_persona_id == persona_id,
+                models.Evaluation.compare_persona_id == persona_id,
+            )
+        )
+
+    rows = query.order_by(models.Evaluation.created_at.desc()).all()
     return [_serialize_evaluation(row, db, owner_user_id) for row in rows]
