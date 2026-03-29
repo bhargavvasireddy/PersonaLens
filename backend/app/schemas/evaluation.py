@@ -13,7 +13,7 @@ class EvaluationIssue(BaseModel):
 
 class EvaluationResult(BaseModel):
     summary: str
-    overall_score: float = Field(ge=0, le=1)
+    overall_score: float = Field(ge=0, le=10, description="UI quality on a 0-10 scale.")
     highlights: list[str] = Field(default_factory=list)
     issues: list[EvaluationIssue] = Field(default_factory=list)
     recommendations: list[str] = Field(default_factory=list)

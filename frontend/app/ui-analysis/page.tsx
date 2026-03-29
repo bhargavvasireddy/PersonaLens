@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import DOMPurify from "dompurify";
 import { createEvaluation, getPersonas } from "@/lib/api";
+import { formatScoreWithMax } from "@/lib/evaluation-score";
 import { Evaluation, Persona } from "@/lib/types";
 import { useAuthGuard } from "@/lib/use-auth-guard";
 
@@ -235,8 +236,8 @@ export default function UiAnalysisPage() {
                 {result.status}
               </span>
               {result.overall_score !== null && (
-                <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
-                  Score: {result.overall_score.toFixed(1)}
+                <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold tabular-nums text-slate-700">
+                  Score: {formatScoreWithMax(result.overall_score)}
                 </span>
               )}
             </div>

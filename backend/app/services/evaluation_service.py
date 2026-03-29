@@ -67,7 +67,7 @@ def _build_prompt(primary_persona: Persona, compare_persona: Persona | None) -> 
             "**Line under the vs:** Right below the title, output one row that shows only the vertical separator so it sits directly under the \"vs\" in the title: <div class=\"persona-comparison\"><div class=\"persona-col\"></div><div class=\"persona-divider\"></div><div class=\"persona-col\"></div></div> (empty columns, so the line appears centered under the title). "
             "Use HTML for structure: <h2>, <h3>, <h4>, <p>, <strong>, <ul><li>, <ol><li>. "
             "**Side-by-side layout (required):** For each comparison section use: <div class=\"persona-comparison\"><div class=\"persona-col\">first persona content</div><div class=\"persona-divider\"></div><div class=\"persona-col\">second persona content</div></div>. First persona-col = primary, second = compare. "
-            "**Each column must include that persona's own score and full analysis.** Use one persona-comparison block per section (Summary, Highlights, Issues, Recommendations). Include all JSON fields, split per persona. "
+            "**Each column must include that persona's own score (each **out of 10**, e.g. 8.2/10) and full analysis.** Use one persona-comparison block per section (Summary, Highlights, Issues, Recommendations). Include all JSON fields, split per persona. "
             "**Tradeoffs &amp; solutions (required at the end):** You MUST end the report with a full section: <h2>Tradeoffs &amp; solutions</h2> followed by one or more paragraphs analyzing potential tradeoffs and solutions to best serve both personas (e.g. where their needs conflict and how the UI could address both). Do not omit this section. "
             "Escape quotes in attributes as \\\" and use &amp; for ampersands in the JSON string."
         )
@@ -78,7 +78,7 @@ def _build_prompt(primary_persona: Persona, compare_persona: Persona | None) -> 
             "frontend_report must be a single string containing **only HTML** (no markdown). "
             f"Use HTML for structure and formatting: <h1><strong>{primary_persona.name}</strong></h1> at the top, "
             "<h2> for section headers, <h3> or <h4> for subsections, <p> for paragraphs, <strong> for emphasis, "
-            "<ul><li> or <ol><li> for lists. The frontend_report **must include every important field from the JSON**: the **overall_score** (show the numeric score), **summary**, all **highlights**, all **issues** (each with title, description, severity, category), and all **recommendations**. Do not omit any of these. "
+            "<ul><li> or <ol><li> for lists. The frontend_report **must include every important field from the JSON**: the **overall_score** shown explicitly **out of 10** (e.g. \"Overall: 7.5 / 10\" — same value as in JSON), **summary**, all **highlights**, all **issues** (each with title, description, severity, category), and all **recommendations**. Do not omit any of these. "
             "End with a brief summary section. Escape quotes in attributes as \\\" in the JSON string."
         )
 
@@ -92,7 +92,7 @@ Primary persona description: {primary_persona.description}
 Return JSON with exactly this structure:
 {{
   "summary": "string",
-  "overall_score": 0.0,
+  "overall_score": 7.5,
   "highlights": ["string"],
   "issues": [
     {{
@@ -107,7 +107,8 @@ Return JSON with exactly this structure:
 }}
 
 Rules:
-- overall_score must be a number between 0 and 1.
+- overall_score must be a number from 0 to 10 (decimals allowed): a **10-point** UX quality score for this evaluation. Do not use a 0-1 scale.
+- In frontend_report, state this score clearly **out of 10** (e.g. \"7.5 / 10\" or \"7.5 out of 10\") and match the JSON value.
 - Keep recommendations concise and actionable.
 - {report_instruction}
 - Do not return markdown syntax (# or **), code fences, or prose outside the JSON object.

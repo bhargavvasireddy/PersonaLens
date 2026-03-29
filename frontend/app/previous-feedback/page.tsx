@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import DOMPurify from "dompurify";
 import { getEvaluations } from "@/lib/api";
+import { clampScore, formatScoreWithMax } from "@/lib/evaluation-score";
 import { Evaluation, EvaluationResult } from "@/lib/types";
 import { useAuthGuard } from "@/lib/use-auth-guard";
 
@@ -22,14 +23,17 @@ const severityStyle: Record<string, string> = {
 };
 
 function ScoreBar({ score }: { score: number }) {
-  const pct = Math.min(100, Math.max(0, (score / 10) * 100));
-  const color = score >= 7 ? "bg-emerald-500" : score >= 4 ? "bg-amber-500" : "bg-red-500";
+  const ten = clampScore(score);
+  const pct = Math.min(100, Math.max(0, (ten / 10) * 100));
+  const color = ten >= 7 ? "bg-emerald-500" : ten >= 4 ? "bg-amber-500" : "bg-red-500";
   return (
     <div className="flex items-center gap-3">
       <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
         <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${pct}%` }} />
       </div>
-      <span className="w-8 text-right text-xs font-semibold text-slate-700">{score.toFixed(1)}</span>
+      <span className="shrink-0 text-right text-xs font-semibold tabular-nums text-slate-700">
+        {formatScoreWithMax(score)}
+      </span>
     </div>
   );
 }
@@ -45,7 +49,7 @@ function StructuredResult({ result }: { result: EvaluationResult }) {
       {/* Score bar */}
       {typeof result.overall_score === "number" && (
         <div className="rounded-lg border border-slate-100 bg-slate-50 px-4 py-3">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Overall Score</p>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Overall score (out of 10)</p>
           <ScoreBar score={result.overall_score} />
         </div>
       )}
@@ -188,8 +192,8 @@ export default function PreviousFeedbackPage() {
                   {evaluation.status}
                 </span>
                 {evaluation.overall_score !== null && (
-                  <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-700">
-                    Score: {evaluation.overall_score.toFixed(1)}
+                  <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold tabular-nums text-indigo-700">
+                    Score: {formatScoreWithMax(evaluation.overall_score)}
                   </span>
                 )}
                 <span className="ml-auto text-xs text-slate-400">
