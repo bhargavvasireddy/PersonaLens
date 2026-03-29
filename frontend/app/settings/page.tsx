@@ -34,8 +34,8 @@ export default function SettingsPage() {
           <p className="mt-0.5 text-xs text-slate-500">Model used for persona-based UI evaluations.</p>
         </div>
         <div className="divide-y divide-slate-100">
-          <SettingRow label="Provider" value="OpenAI" />
-          <SettingRow label="Model" value="Configured via backend .env (MODEL_NAME)" />
+          <SettingRow label="Provider" value="Anthropic (Claude)" />
+          <SettingRow label="Model" value="claude-haiku-4-5 (backend .env MODEL_NAME)" />
           <SettingRow label="Evaluation storage" value="Supabase Postgres — evaluations table" />
         </div>
       </div>

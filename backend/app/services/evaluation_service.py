@@ -4,7 +4,7 @@ import mimetypes
 import re
 from pathlib import Path
 
-from openai import OpenAI
+from anthropic import Anthropic
 from pydantic import ValidationError
 
 from app.core.config import settings
@@ -31,11 +31,11 @@ def evaluate_ui(
     primary_persona: Persona,
     compare_persona: Persona | None = None,
 ) -> EvaluationResult:
-    if not settings.openai_api_key.strip():
-        raise AIModelCallError("OPENAI_API_KEY is not configured.")
+    if not settings.model_key.strip():
+        raise AIModelCallError("MODEL_KEY is not configured.")
 
-    client = OpenAI(api_key=settings.openai_api_key)
-    model_name = settings.model_name or "gpt-4o-mini"
+    client = Anthropic(api_key=settings.model_key)
+    model_name = (settings.model_name or "").strip() or "claude-haiku-4-5"
     prompt = _build_prompt(primary_persona, compare_persona)
 
     try:
@@ -115,68 +115,79 @@ Rules:
 """.strip()
 
 
-def _call_vision_model(client: OpenAI, model_name: str, prompt: str, image_path: str) -> str:
+def _image_media_type(image_file: Path) -> str:
+    mime = mimetypes.guess_type(image_file.name)[0] or "application/octet-stream"
+    if mime == "application/octet-stream" or not mime.startswith("image/"):
+        return "image/png"
+    return mime
+
+
+def _call_vision_model(client: Anthropic, model_name: str, prompt: str, image_path: str) -> str:
     image_file = Path(image_path)
     if not image_file.exists():
         raise AIModelCallError(f"Image does not exist: {image_path}")
 
-    mime_type = mimetypes.guess_type(image_file.name)[0] or "application/octet-stream"
+    media_type = _image_media_type(image_file)
     image_b64 = base64.b64encode(image_file.read_bytes()).decode("utf-8")
-    image_data_url = f"data:{mime_type};base64,{image_b64}"
 
-    completion = client.chat.completions.create(
+    response = client.messages.create(
         model=model_name,
-        response_format={"type": "json_object"},
+        max_tokens=8192,
         temperature=0.2,
+        system=SYSTEM_PROMPT,
         messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
             {
                 "role": "user",
                 "content": [
                     {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {"url": image_data_url}},
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": media_type,
+                            "data": image_b64,
+                        },
+                    },
                 ],
-            },
+            }
         ],
     )
-    return _completion_to_text(completion)
+    return _message_to_text(response)
 
 
-def _call_text_model(client: OpenAI, model_name: str, prompt: str) -> str:
-    completion = client.chat.completions.create(
+def _call_text_model(client: Anthropic, model_name: str, prompt: str) -> str:
+    response = client.messages.create(
         model=model_name,
-        response_format={"type": "json_object"},
+        max_tokens=8192,
         temperature=0.2,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": prompt},
-        ],
+        system=SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": prompt}],
     )
-    return _completion_to_text(completion)
+    return _message_to_text(response)
 
 
-def _completion_to_text(completion: object) -> str:
-    choices = getattr(completion, "choices", None)
-    if not choices:
-        raise AIModelCallError("Model returned no choices.")
+def _message_to_text(response: object) -> str:
+    blocks = getattr(response, "content", None)
+    if not blocks:
+        raise AIModelCallError("Model returned no content.")
 
-    message = choices[0].message
-    content = getattr(message, "content", None)
-    if isinstance(content, str):
-        text = content.strip()
-        if text:
-            return text
-    if isinstance(content, list):
-        fragments: list[str] = []
-        for item in content:
-            if isinstance(item, dict):
-                maybe_text = item.get("text")
-                if isinstance(maybe_text, str):
-                    fragments.append(maybe_text)
-        merged = "".join(fragments).strip()
-        if merged:
-            return merged
-    raise AIModelCallError("Model response content is empty.")
+    fragments: list[str] = []
+    for block in blocks:
+        if isinstance(block, dict):
+            if block.get("type") == "text":
+                text = block.get("text")
+                if isinstance(text, str):
+                    fragments.append(text)
+        else:
+            if getattr(block, "type", None) == "text":
+                text = getattr(block, "text", None)
+                if isinstance(text, str):
+                    fragments.append(text)
+
+    merged = "".join(fragments).strip()
+    if not merged:
+        raise AIModelCallError("Model response content is empty.")
+    return merged
 
 
 def _extract_json_payload(raw_text: str) -> dict[str, object]:

@@ -1,7 +1,7 @@
 # PersonaLens
 
 PersonaLens is a two-service project:
-- `backend/`: FastAPI + SQLAlchemy + Alembic + Supabase Postgres + OpenAI evaluation + Supabase Auth token validation
+- `backend/`: FastAPI + SQLAlchemy + Alembic + Supabase Postgres + Anthropic Claude evaluation + Supabase Auth token validation
 - `frontend/`: Next.js (TypeScript, App Router, Tailwind) with Supabase Auth in the UI
 
 ## Summary of recent changes
@@ -29,7 +29,7 @@ PersonaLens is a two-service project:
 2. Core data routes are protected (`/personas`, `/evaluate`, `/evaluations`).
 3. Database is on Supabase Postgres with Alembic migrations.
 4. Persona and evaluation data is owner-scoped per authenticated user.
-5. AI evaluation is real (OpenAI call) and persisted in DB.
+5. AI evaluation is real (Anthropic Claude call) and persisted in DB.
 6. Upload files are currently saved locally in `backend/uploads`.
 
 ## Install First
@@ -38,7 +38,7 @@ PersonaLens is a two-service project:
 2. Node.js 18+ (tested on 24)
 3. npm
 4. Supabase project (DB + Auth)
-5. OpenAI API key
+5. Anthropic API key (`MODEL_KEY`)
 
 ## 1) Configure Supabase + Env
 
@@ -49,8 +49,8 @@ CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 DATABASE_URL=postgresql://postgres.<project_ref>:<URL_ENCODED_DB_PASSWORD>@<region-pooler-host>.pooler.supabase.com:6543/postgres?sslmode=require
 UPLOAD_DIR=./uploads
 
-OPENAI_API_KEY=your_key_here
-MODEL_NAME=gpt-4o-mini
+MODEL_KEY=your_anthropic_key_here
+MODEL_NAME=claude-haiku-4-5
 
 AUTH_PROVIDER=supabase
 SUPABASE_URL=https://<project_ref>.supabase.co
@@ -190,7 +190,7 @@ These checks were executed successfully against the current codebase and Supabas
    - `alembic upgrade head` completed on Supabase Postgres
    - tables present: `users`, `personas`, `evaluations`, `alembic_version`
 
-Note: AI evaluation success depends on a valid `OPENAI_API_KEY`, model access, and internet connectivity.
+Note: AI evaluation success depends on a valid `MODEL_KEY`, model access, and internet connectivity.
 
 ## Current AI + Storage Behavior
 

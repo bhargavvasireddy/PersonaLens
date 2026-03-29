@@ -11,8 +11,8 @@ class Settings(BaseSettings):
         alias="DATABASE_URL",
     )
     upload_dir: str = Field(default="./uploads", alias="UPLOAD_DIR")
-    openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
-    model_name: str = Field(default="gpt-4o-mini", alias="MODEL_NAME")
+    model_key: str = Field(default="", alias="MODEL_KEY")
+    model_name: str = Field(default="claude-haiku-4-5", alias="MODEL_NAME")
     auth_provider: str = Field(default="supabase", alias="AUTH_PROVIDER")
     jwt_secret_key: str = Field(default="change-me-in-production", alias="JWT_SECRET_KEY")
     jwt_algorithm: str = Field(default="HS256", alias="JWT_ALGORITHM")
