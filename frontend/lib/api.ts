@@ -1,4 +1,4 @@
-import { CreatePersonaInput, Evaluation, Persona } from "@/lib/types";
+import { AssistMessage, CreatePersonaInput, Evaluation, Persona, PersonaAssistResponse } from "@/lib/types";
 import { supabase } from "@/lib/supabase";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
@@ -91,6 +91,14 @@ export function updatePersona(personaId: number, payload: CreatePersonaInput) {
 export function deletePersona(personaId: number) {
   return request<void>(`/personas/${personaId}`, {
     method: "DELETE"
+  });
+}
+
+export function assistPersona(name: string, messages: AssistMessage[]) {
+  return request<PersonaAssistResponse>("/personas/assist", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, messages }),
   });
 }
 

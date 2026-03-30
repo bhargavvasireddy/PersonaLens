@@ -40,3 +40,13 @@ export type CreatePersonaInput = {
   name: string;
   description: string;
 };
+
+export type AssistMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export type PersonaAssistResponse = {
+  message: string;
+  suggested_description: string | null;
+};

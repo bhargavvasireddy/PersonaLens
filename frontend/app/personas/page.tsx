@@ -1,8 +1,8 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
-import { createPersona, deletePersona, getEvaluations, getPersonas, updatePersona } from "@/lib/api";
-import { Persona } from "@/lib/types";
+import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
+import { assistPersona, createPersona, deletePersona, getEvaluations, getPersonas, updatePersona } from "@/lib/api";
+import { AssistMessage, Persona } from "@/lib/types";
 import { useAuthGuard } from "@/lib/use-auth-guard";
 
 export default function PersonasPage() {
@@ -22,6 +22,15 @@ export default function PersonasPage() {
   const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  // AI assist state
+  const [assistOpen, setAssistOpen] = useState(false);
+  const [assistMessages, setAssistMessages] = useState<AssistMessage[]>([]);
+  const [assistInput, setAssistInput] = useState("");
+  const [assistLoading, setAssistLoading] = useState(false);
+  const [assistError, setAssistError] = useState("");
+  const [lastSuggestion, setLastSuggestion] = useState<string | null>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     getPersonas()
       .then(setPersonas)
@@ -36,6 +45,10 @@ export default function PersonasPage() {
     setName(editingPersona.name);
     setDescription(editingPersona.description);
   }, [editingPersona]);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [assistMessages, assistLoading]);
 
   useEffect(() => {
     if (!deleteTarget) {
@@ -104,12 +117,60 @@ export default function PersonasPage() {
     }
   }
 
+  function resetAssist() {
+    setAssistOpen(false);
+    setAssistMessages([]);
+    setAssistInput("");
+    setAssistError("");
+    setLastSuggestion(null);
+  }
+
   function closeModal() {
     setSubmitError("");
     setName("");
     setDescription("");
     setShowModal(false);
     setEditingPersona(null);
+    resetAssist();
+  }
+
+  async function callAssist(messages: AssistMessage[]) {
+    setAssistLoading(true);
+    setAssistError("");
+    try {
+      const res = await assistPersona(name.trim(), messages);
+      setAssistMessages((prev) => [...prev, { role: "assistant", content: res.message }]);
+      if (res.suggested_description) {
+        setLastSuggestion(res.suggested_description);
+      }
+    } catch (err) {
+      setAssistError(err instanceof Error ? err.message : "AI assist failed.");
+    } finally {
+      setAssistLoading(false);
+    }
+  }
+
+  async function openAssist() {
+    setAssistOpen(true);
+    if (assistMessages.length === 0) {
+      await callAssist([]);
+    }
+  }
+
+  async function sendAssistMessage() {
+    const content = assistInput.trim();
+    if (!content || assistLoading) return;
+    const updated: AssistMessage[] = [...assistMessages, { role: "user", content }];
+    setAssistMessages(updated);
+    setAssistInput("");
+    await callAssist(updated);
+  }
+
+  function onAssistKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendAssistMessage();
+    }
   }
 
   async function onConfirmDelete() {
@@ -143,6 +204,7 @@ export default function PersonasPage() {
             setName("");
             setDescription("");
             setSubmitError("");
+            resetAssist();
             setShowModal(true);
           }}
           className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 outline-none"
@@ -197,6 +259,7 @@ export default function PersonasPage() {
                 setName("");
                 setDescription("");
                 setSubmitError("");
+                resetAssist();
                 setShowModal(true);
               }}
               className="mt-1 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
@@ -234,6 +297,7 @@ export default function PersonasPage() {
                         type="button"
                         onClick={() => {
                           setShowModal(false);
+                          resetAssist();
                           setEditingPersona(persona);
                         }}
                         className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1"
@@ -262,77 +326,186 @@ export default function PersonasPage() {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
           onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
         >
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-base font-semibold text-slate-900">{editingPersona ? "Edit Persona" : "Add Persona"}</h3>
-              <button
-                type="button"
-                onClick={closeModal}
-                className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
-            </div>
-            <form onSubmit={onSubmitPersona} className="space-y-4">
-              <div>
-                <label htmlFor="persona-name" className="block text-sm font-medium text-slate-700 mb-1.5">
-                  Name <span className="text-red-400">*</span>
-                </label>
-                <input
-                  id="persona-name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 shadow-sm transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none"
-                  placeholder="e.g. Busy College Student"
-                  autoFocus
-                />
-              </div>
-              <div>
-                <label htmlFor="persona-description" className="block text-sm font-medium text-slate-700 mb-1.5">
-                  Description
-                  <span className="ml-1 font-normal text-slate-400">(optional)</span>
-                </label>
-                <textarea
-                  id="persona-description"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={4}
-                  className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 shadow-sm transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none resize-none"
-                  placeholder="Goals, context, constraints, tech comfort level…"
-                />
-              </div>
-
-              {submitError && (
-                <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3.5 py-3 text-sm text-red-700">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 h-4 w-4 shrink-0">
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="8" x2="12" y2="12" />
-                    <line x1="12" y1="16" x2="12.01" y2="16" />
-                  </svg>
-                  {submitError}
+          <div className={`w-full rounded-2xl bg-white shadow-xl flex overflow-hidden transition-all ${assistOpen ? "max-w-2xl" : "max-w-md"}`}>
+            {/* Form column */}
+            <div className="flex-1 min-w-0 p-6 flex flex-col">
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-base font-semibold text-slate-900">{editingPersona ? "Edit Persona" : "Add Persona"}</h3>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={assistOpen ? () => setAssistOpen(false) : openAssist}
+                    disabled={!name.trim()}
+                    title={name.trim() ? "Get AI help building this persona" : "Enter a name first"}
+                    className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed ${
+                      assistOpen
+                        ? "bg-violet-100 text-violet-700 hover:bg-violet-200"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                      <path d="M12 2a7 7 0 0 1 7 7c0 3-1.8 5.5-4.5 6.7V18h-5v-2.3C6.8 14.5 5 12 5 9a7 7 0 0 1 7-7z" />
+                      <path d="M9 22h6" />
+                    </svg>
+                    AI Assist
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </button>
                 </div>
-              )}
-
-              <div className="flex justify-end gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="rounded-lg bg-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-60 outline-none"
-                >
-                  {submitting ? "Saving…" : editingPersona ? "Save changes" : "Save Persona"}
-                </button>
               </div>
-            </form>
+              <form onSubmit={onSubmitPersona} className="flex flex-col flex-1 space-y-4">
+                <div>
+                  <label htmlFor="persona-name" className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Name <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    id="persona-name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 shadow-sm transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                    placeholder="e.g. Busy College Student"
+                    autoFocus
+                  />
+                </div>
+                <div className="flex-1 flex flex-col">
+                  <label htmlFor="persona-description" className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Description
+                    <span className="ml-1 font-normal text-slate-400">(optional)</span>
+                  </label>
+                  <textarea
+                    id="persona-description"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={4}
+                    className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 shadow-sm transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none resize-none"
+                    placeholder="Goals, context, constraints, tech comfort level…"
+                  />
+                </div>
+
+                {submitError && (
+                  <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3.5 py-3 text-sm text-red-700">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 h-4 w-4 shrink-0">
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="8" x2="12" y2="12" />
+                      <line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                    {submitError}
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="rounded-lg bg-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-60 outline-none"
+                  >
+                    {submitting ? "Saving…" : editingPersona ? "Save changes" : "Save Persona"}
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* AI Assist panel */}
+            {assistOpen && (
+              <>
+                <div className="w-px bg-slate-200 flex-shrink-0" />
+                <div className="w-80 flex-shrink-0 flex flex-col p-4 bg-slate-50">
+                  <div className="flex items-center gap-2 mb-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5 text-violet-500">
+                      <path d="M12 2a7 7 0 0 1 7 7c0 3-1.8 5.5-4.5 6.7V18h-5v-2.3C6.8 14.5 5 12 5 9a7 7 0 0 1 7-7z" />
+                      <path d="M9 22h6" />
+                    </svg>
+                    <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">AI Assist</span>
+                  </div>
+
+                  {/* Message list */}
+                  <div className="flex-1 overflow-y-auto space-y-2.5 mb-3 max-h-72 pr-1">
+                    {assistMessages.map((msg, i) => (
+                      <div
+                        key={i}
+                        className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                      >
+                        <div
+                          className={`max-w-[85%] rounded-xl px-3 py-2 text-xs leading-relaxed ${
+                            msg.role === "user"
+                              ? "bg-indigo-600 text-white rounded-br-sm"
+                              : "bg-white border border-slate-200 text-slate-700 rounded-bl-sm shadow-sm"
+                          }`}
+                        >
+                          {msg.content}
+                        </div>
+                      </div>
+                    ))}
+                    {assistLoading && (
+                      <div className="flex justify-start">
+                        <div className="bg-white border border-slate-200 rounded-xl rounded-bl-sm px-3 py-2 shadow-sm">
+                          <div className="flex gap-1 items-center">
+                            <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:0ms]" />
+                            <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:150ms]" />
+                            <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:300ms]" />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    <div ref={chatEndRef} />
+                  </div>
+
+                  {/* Suggestion card */}
+                  {lastSuggestion && (
+                    <div className="mb-3 rounded-lg border border-violet-200 bg-violet-50 p-3">
+                      <p className="text-xs font-semibold text-violet-700 mb-1.5">Suggested description</p>
+                      <p className="text-xs text-slate-700 leading-relaxed">{lastSuggestion}</p>
+                      <button
+                        type="button"
+                        onClick={() => setDescription(lastSuggestion)}
+                        className="mt-2.5 w-full rounded-md bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-violet-700 focus:outline-none"
+                      >
+                        Apply to description
+                      </button>
+                    </div>
+                  )}
+
+                  {assistError && (
+                    <p className="mb-2 text-xs text-red-600">{assistError}</p>
+                  )}
+
+                  {/* Input */}
+                  <div className="flex gap-1.5">
+                    <input
+                      value={assistInput}
+                      onChange={(e) => setAssistInput(e.target.value)}
+                      onKeyDown={onAssistKeyDown}
+                      disabled={assistLoading}
+                      placeholder="Your answer…"
+                      className="flex-1 min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 placeholder-slate-400 shadow-sm transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none disabled:opacity-50"
+                    />
+                    <button
+                      type="button"
+                      onClick={sendAssistMessage}
+                      disabled={assistLoading || !assistInput.trim()}
+                      className="flex-shrink-0 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-40 focus:outline-none"
+                    >
+                      Send
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
