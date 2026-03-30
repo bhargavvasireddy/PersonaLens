@@ -5,6 +5,45 @@ import { assistPersona, createPersona, deletePersona, getEvaluations, getPersona
 import { AssistMessage, Persona } from "@/lib/types";
 import { useAuthGuard } from "@/lib/use-auth-guard";
 
+type PersonaTemplate = {
+  id: string;
+  name: string;
+  description: string;
+};
+
+const personaTemplates: PersonaTemplate[] = [
+  {
+    id: "accessibility-advocate",
+    name: "Accessibility Advocate",
+    description:
+      "Values readable text, clear labels, strong contrast, keyboard accessibility, and inclusive design.",
+  },
+  {
+    id: "first-time-user",
+    name: "First-Time User",
+    description:
+      "Has never used the interface before and needs clear guidance, simple navigation, and obvious next steps.",
+  },
+  {
+    id: "impatient-user",
+    name: "Impatient User",
+    description:
+      "Wants to complete tasks quickly with minimal friction, few clicks, and immediate feedback.",
+  },
+  {
+    id: "elderly-user",
+    name: "Elderly User",
+    description:
+      "Benefits from larger text, straightforward instructions, uncluttered layouts, and easy-to-understand flows.",
+  },
+  {
+    id: "power-user",
+    name: "Power User",
+    description:
+      "Experienced and efficiency-focused, prefers fast workflows, fewer interruptions, and advanced control.",
+  },
+];
+
 export default function PersonasPage() {
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [loading, setLoading] = useState(true);
@@ -19,6 +58,7 @@ export default function PersonasPage() {
   useAuthGuard();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -44,6 +84,7 @@ export default function PersonasPage() {
     }
     setName(editingPersona.name);
     setDescription(editingPersona.description);
+    setSelectedTemplateId("");
   }, [editingPersona]);
 
   useEffect(() => {
@@ -84,6 +125,16 @@ export default function PersonasPage() {
     };
   }, [deleteTarget]);
 
+  function applyTemplate(templateId: string) {
+    const template = personaTemplates.find((p) => p.id === templateId);
+    if (!template) {
+      return;
+    }
+
+    setName(template.name);
+    setDescription(template.description);
+  }
+
   async function onSubmitPersona(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitError("");
@@ -108,6 +159,7 @@ export default function PersonasPage() {
       }
       setName("");
       setDescription("");
+      setSelectedTemplateId("");
     } catch (err) {
       setSubmitError(
         err instanceof Error ? err.message : editingPersona ? "Unable to save persona." : "Unable to create persona."
@@ -129,6 +181,7 @@ export default function PersonasPage() {
     setSubmitError("");
     setName("");
     setDescription("");
+    setSelectedTemplateId("");
     setShowModal(false);
     setEditingPersona(null);
     resetAssist();
@@ -203,6 +256,7 @@ export default function PersonasPage() {
             setEditingPersona(null);
             setName("");
             setDescription("");
+            setSelectedTemplateId("");
             setSubmitError("");
             resetAssist();
             setShowModal(true);
@@ -258,6 +312,7 @@ export default function PersonasPage() {
                 setEditingPersona(null);
                 setName("");
                 setDescription("");
+                setSelectedTemplateId("");
                 setSubmitError("");
                 resetAssist();
                 setShowModal(true);
@@ -320,11 +375,12 @@ export default function PersonasPage() {
         )}
       </div>
 
-      {/* Create / edit modal */}
       {(showModal || editingPersona) && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-          onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeModal();
+          }}
         >
           <div className={`w-full rounded-2xl bg-white shadow-xl flex overflow-hidden transition-all ${assistOpen ? "max-w-2xl" : "max-w-md"}`}>
             {/* Form column */}
@@ -510,7 +566,6 @@ export default function PersonasPage() {
         </div>
       )}
 
-      {/* Delete confirmation */}
       {deleteTarget && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
@@ -541,9 +596,7 @@ export default function PersonasPage() {
                 <span>Could not load evaluation count; deleting will still remove any evaluations tied to this persona.</span>
               )}
             </div>
-            {deleteError && (
-              <p className="mt-3 text-sm text-red-600">{deleteError}</p>
-            )}
+            {deleteError && <p className="mt-3 text-sm text-red-600">{deleteError}</p>}
             <div className="mt-6 flex justify-end gap-2">
               <button
                 type="button"
