@@ -5,6 +5,45 @@ import { createPersona, deletePersona, getEvaluations, getPersonas, updatePerson
 import { Persona } from "@/lib/types";
 import { useAuthGuard } from "@/lib/use-auth-guard";
 
+type PersonaTemplate = {
+  id: string;
+  name: string;
+  description: string;
+};
+
+const personaTemplates: PersonaTemplate[] = [
+  {
+    id: "accessibility-advocate",
+    name: "Accessibility Advocate",
+    description:
+      "Values readable text, clear labels, strong contrast, keyboard accessibility, and inclusive design.",
+  },
+  {
+    id: "first-time-user",
+    name: "First-Time User",
+    description:
+      "Has never used the interface before and needs clear guidance, simple navigation, and obvious next steps.",
+  },
+  {
+    id: "impatient-user",
+    name: "Impatient User",
+    description:
+      "Wants to complete tasks quickly with minimal friction, few clicks, and immediate feedback.",
+  },
+  {
+    id: "elderly-user",
+    name: "Elderly User",
+    description:
+      "Benefits from larger text, straightforward instructions, uncluttered layouts, and easy-to-understand flows.",
+  },
+  {
+    id: "power-user",
+    name: "Power User",
+    description:
+      "Experienced and efficiency-focused, prefers fast workflows, fewer interruptions, and advanced control.",
+  },
+];
+
 export default function PersonasPage() {
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [loading, setLoading] = useState(true);
@@ -19,6 +58,7 @@ export default function PersonasPage() {
   useAuthGuard();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -35,6 +75,7 @@ export default function PersonasPage() {
     }
     setName(editingPersona.name);
     setDescription(editingPersona.description);
+    setSelectedTemplateId("");
   }, [editingPersona]);
 
   useEffect(() => {
@@ -71,6 +112,16 @@ export default function PersonasPage() {
     };
   }, [deleteTarget]);
 
+  function applyTemplate(templateId: string) {
+    const template = personaTemplates.find((p) => p.id === templateId);
+    if (!template) {
+      return;
+    }
+
+    setName(template.name);
+    setDescription(template.description);
+  }
+
   async function onSubmitPersona(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitError("");
@@ -95,6 +146,7 @@ export default function PersonasPage() {
       }
       setName("");
       setDescription("");
+      setSelectedTemplateId("");
     } catch (err) {
       setSubmitError(
         err instanceof Error ? err.message : editingPersona ? "Unable to save persona." : "Unable to create persona."
@@ -108,6 +160,7 @@ export default function PersonasPage() {
     setSubmitError("");
     setName("");
     setDescription("");
+    setSelectedTemplateId("");
     setShowModal(false);
     setEditingPersona(null);
   }
@@ -142,6 +195,7 @@ export default function PersonasPage() {
             setEditingPersona(null);
             setName("");
             setDescription("");
+            setSelectedTemplateId("");
             setSubmitError("");
             setShowModal(true);
           }}
@@ -196,6 +250,7 @@ export default function PersonasPage() {
                 setEditingPersona(null);
                 setName("");
                 setDescription("");
+                setSelectedTemplateId("");
                 setSubmitError("");
                 setShowModal(true);
               }}
@@ -234,6 +289,7 @@ export default function PersonasPage() {
                         type="button"
                         onClick={() => {
                           setShowModal(false);
+                          setSelectedTemplateId("");
                           setEditingPersona(persona);
                         }}
                         className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1"
@@ -256,15 +312,18 @@ export default function PersonasPage() {
         )}
       </div>
 
-      {/* Create / edit modal */}
       {(showModal || editingPersona) && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-          onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeModal();
+          }}
         >
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-base font-semibold text-slate-900">{editingPersona ? "Edit Persona" : "Add Persona"}</h3>
+            <div className="mb-5 flex items-center justify-between">
+              <h3 className="text-base font-semibold text-slate-900">
+                {editingPersona ? "Edit Persona" : "Add Persona"}
+              </h3>
               <button
                 type="button"
                 onClick={closeModal}
@@ -276,9 +335,36 @@ export default function PersonasPage() {
                 </svg>
               </button>
             </div>
+
             <form onSubmit={onSubmitPersona} className="space-y-4">
+              {!editingPersona && (
+                <div>
+                  <label htmlFor="persona-template" className="mb-1.5 block text-sm font-medium text-slate-700">
+                    Starter template
+                    <span className="ml-1 font-normal text-slate-400">(optional)</span>
+                  </label>
+                  <select
+                    id="persona-template"
+                    value={selectedTemplateId}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setSelectedTemplateId(value);
+                      applyTemplate(value);
+                    }}
+                    className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 shadow-sm transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                  >
+                    <option value="">Choose a starter persona</option>
+                    {personaTemplates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div>
-                <label htmlFor="persona-name" className="block text-sm font-medium text-slate-700 mb-1.5">
+                <label htmlFor="persona-name" className="mb-1.5 block text-sm font-medium text-slate-700">
                   Name <span className="text-red-400">*</span>
                 </label>
                 <input
@@ -290,8 +376,9 @@ export default function PersonasPage() {
                   autoFocus
                 />
               </div>
+
               <div>
-                <label htmlFor="persona-description" className="block text-sm font-medium text-slate-700 mb-1.5">
+                <label htmlFor="persona-description" className="mb-1.5 block text-sm font-medium text-slate-700">
                   Description
                   <span className="ml-1 font-normal text-slate-400">(optional)</span>
                 </label>
@@ -337,7 +424,6 @@ export default function PersonasPage() {
         </div>
       )}
 
-      {/* Delete confirmation */}
       {deleteTarget && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
@@ -368,9 +454,7 @@ export default function PersonasPage() {
                 <span>Could not load evaluation count; deleting will still remove any evaluations tied to this persona.</span>
               )}
             </div>
-            {deleteError && (
-              <p className="mt-3 text-sm text-red-600">{deleteError}</p>
-            )}
+            {deleteError && <p className="mt-3 text-sm text-red-600">{deleteError}</p>}
             <div className="mt-6 flex justify-end gap-2">
               <button
                 type="button"
