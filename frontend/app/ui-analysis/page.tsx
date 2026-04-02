@@ -242,10 +242,24 @@ export default function UiAnalysisPage() {
               )}
             </div>
           </div>
-          <div className="p-6">
+          <div className="p-6 space-y-6">
+            {result.sample_ui?.html ? (
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Sample UI</p>
+                <div
+                  className="max-h-[min(70vh,720px)] overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-800 shadow-inner
+                    [&_.sample-ui-mock]:min-h-[120px]"
+                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(result.sample_ui.html) }}
+                />
+              </div>
+            ) : null}
             {result.frontend_report ? (
-              <div
-                className="evaluation-report text-sm text-slate-700
+              <div>
+                {result.sample_ui?.html ? (
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Feedback</p>
+                ) : null}
+                <div
+                  className="evaluation-report text-sm text-slate-700
                   [&_.persona-comparison]:grid [&_.persona-comparison]:grid-cols-[1fr_2px_1fr] [&_.persona-comparison]:gap-0 [&_.persona-comparison]:my-4 [&_.persona-comparison]:items-stretch [&_.persona-comparison]:w-full
                   [&_.persona-col]:min-w-0 [&_.persona-col]:px-4 [&_.persona-col]:py-3
                   [&_.persona-divider]:bg-slate-200 [&_.persona-divider]:self-stretch
@@ -257,13 +271,14 @@ export default function UiAnalysisPage() {
                   [&_ul]:my-2 [&_ul]:list-inside [&_ul]:list-disc [&_ul]:space-y-1
                   [&_ol]:my-2 [&_ol]:list-inside [&_ol]:list-decimal [&_ol]:space-y-1
                   [&_strong]:font-semibold"
-                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(result.frontend_report) }}
-              />
-            ) : (
+                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(result.frontend_report) }}
+                />
+              </div>
+            ) : !result.sample_ui?.html ? (
               <pre className="overflow-x-auto rounded-lg bg-slate-900 p-4 text-xs text-slate-100">
                 {JSON.stringify(result, null, 2)}
               </pre>
-            )}
+            ) : null}
           </div>
         </div>
       )}

@@ -12,7 +12,7 @@ from app.core.config import settings
 from app.core.security import AuthenticatedPrincipal
 from app.db import models
 from app.db.session import get_db
-from app.schemas.evaluation import EvaluationRead, EvaluationResult
+from app.schemas.evaluation import EvaluationRead, EvaluationResult, SampleUi
 from app.services.evaluation_service import AIInvalidJSONError, AIModelCallError, evaluate_ui
 
 router = APIRouter(tags=["evaluations"])
@@ -45,10 +45,18 @@ def _serialize_evaluation(evaluation: models.Evaluation, db: Session, owner_user
         )
 
     frontend_report = ""
+    sample_ui: SampleUi | None = None
     if isinstance(parsed_result, EvaluationResult):
         frontend_report = getattr(parsed_result, "frontend_report", "") or getattr(parsed_result, "report_markdown", "") or ""
+        sample_ui = getattr(parsed_result, "sample_ui", None)
     elif isinstance(parsed_result, dict):
         frontend_report = parsed_result.get("frontend_report") or parsed_result.get("report_markdown") or ""
+        raw_su = parsed_result.get("sample_ui")
+        if isinstance(raw_su, dict):
+            try:
+                sample_ui = SampleUi.model_validate(raw_su)
+            except Exception:
+                sample_ui = None
     if not isinstance(frontend_report, str):
         frontend_report = ""
 
@@ -64,6 +72,7 @@ def _serialize_evaluation(evaluation: models.Evaluation, db: Session, owner_user
         error_message=evaluation.error_message,
         result_json=parsed_result,
         frontend_report=frontend_report,
+        sample_ui=sample_ui,
         created_at=evaluation.created_at,
     )
 
@@ -123,7 +132,7 @@ def create_evaluation(
     target_path.write_bytes(file_bytes)
     logger.info("Saved upload to %s", target_path)
 
-    logger.info("Calling AI model for evaluation...")
+    logger.info("Calling AI models for evaluation (feedback + sample UI)...")
     try:
         result_payload = evaluate_ui(
             image_path=str(target_path),

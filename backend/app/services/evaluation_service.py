@@ -9,7 +9,7 @@ from pydantic import ValidationError
 
 from app.core.config import settings
 from app.db.models import Persona
-from app.schemas.evaluation import EvaluationResult
+from app.schemas.evaluation import EvaluationResult, SampleUi
 
 
 class AIModelCallError(Exception):
@@ -25,8 +25,35 @@ SYSTEM_PROMPT = (
     " Evaluate the UI screenshot against the persona context and provide actionable feedback."
 )
 
+SAMPLE_UI_SYSTEM_PROMPT = (
+    "You are a product designer creating HTML UI mockups. Return only valid JSON and no extra text."
+    ' The JSON must have exactly one key, "html", whose value is a string of HTML.'
+)
+
 
 def evaluate_ui(
+    image_path: str,
+    primary_persona: Persona,
+    compare_persona: Persona | None = None,
+) -> EvaluationResult:
+    if not settings.model_key.strip():
+        raise AIModelCallError("MODEL_KEY is not configured.")
+
+    feedback = evaluate_feedback(
+        image_path=image_path,
+        primary_persona=primary_persona,
+        compare_persona=compare_persona,
+    )
+    sample_ui = generate_sample_ui(
+        image_path=image_path,
+        feedback=feedback,
+        primary_persona=primary_persona,
+        compare_persona=compare_persona,
+    )
+    return feedback.model_copy(update={"sample_ui": sample_ui})
+
+
+def evaluate_feedback(
     image_path: str,
     primary_persona: Persona,
     compare_persona: Persona | None = None,
@@ -53,6 +80,89 @@ def evaluate_ui(
             ) from fallback_error
 
     return _parse_and_validate(raw_text)
+
+
+def generate_sample_ui(
+    image_path: str,
+    feedback: EvaluationResult,
+    primary_persona: Persona,
+    compare_persona: Persona | None = None,
+) -> SampleUi:
+    if not settings.model_key.strip():
+        raise AIModelCallError("MODEL_KEY is not configured.")
+
+    client = Anthropic(api_key=settings.model_key)
+    model_name = (settings.model_name or "").strip() or "claude-haiku-4-5"
+    prompt = _build_sample_ui_prompt(feedback, primary_persona, compare_persona)
+
+    try:
+        raw_text = _call_vision_model(
+            client=client,
+            model_name=model_name,
+            prompt=prompt,
+            image_path=image_path,
+            system=SAMPLE_UI_SYSTEM_PROMPT,
+        )
+    except Exception as vision_error:
+        try:
+            fallback_prompt = (
+                f"{prompt}\n\nFallback: if you cannot see the image, infer layout from the evaluation JSON only."
+            )
+            raw_text = _call_text_model(
+                client=client,
+                model_name=model_name,
+                prompt=fallback_prompt,
+                system=SAMPLE_UI_SYSTEM_PROMPT,
+            )
+        except Exception as fallback_error:
+            raise AIModelCallError(
+                f"Sample UI vision call failed ({vision_error}); text fallback failed ({fallback_error})."
+            ) from fallback_error
+
+    return _parse_sample_ui(raw_text)
+
+
+def _build_sample_ui_prompt(
+    feedback: EvaluationResult,
+    primary_persona: Persona,
+    compare_persona: Persona | None,
+) -> str:
+    payload = feedback.model_dump(exclude={"sample_ui"}, exclude_none=True)
+    feedback_json = json.dumps(payload, ensure_ascii=False)
+    if compare_persona is not None:
+        persona_ctx = (
+            f"Primary persona: {primary_persona.name}\n{primary_persona.description}\n\n"
+            f"Compare persona: {compare_persona.name}\n{compare_persona.description}"
+        )
+    else:
+        persona_ctx = f"Persona: {primary_persona.name}\n{primary_persona.description}"
+
+    return f"""
+The image is the current UI screenshot. Below is structured UX feedback (JSON) from a prior evaluation pass.
+
+{persona_ctx}
+
+Evaluation JSON (verbatim):
+{feedback_json}
+
+Task: Produce a single HTML fragment that mockups an improved or alternative UI addressing the feedback and persona needs. This is illustrative, not a pixel-perfect copy.
+
+Return JSON with exactly this structure:
+{{ "html": "<div class=\\"sample-ui-mock\\">...</div>" }}
+
+Rules:
+- The "html" value must be a single HTML fragment only (no <!DOCTYPE>, no <html>/<body> wrapper). Root element must use class "sample-ui-mock".
+- Use semantic elements (header, nav, main, section, button, etc.) as appropriate; inline styles are allowed sparingly for layout.
+- Do not use markdown, code fences, or any text outside the JSON object.
+""".strip()
+
+
+def _parse_sample_ui(raw_text: str) -> SampleUi:
+    payload = _extract_json_payload(raw_text)
+    html = payload.get("html")
+    if not isinstance(html, str):
+        raise AIInvalidJSONError('Sample UI output must be JSON with a string "html" key.')
+    return SampleUi(html=html)
 
 
 def _build_prompt(primary_persona: Persona, compare_persona: Persona | None) -> str:
@@ -122,7 +232,13 @@ def _image_media_type(image_file: Path) -> str:
     return mime
 
 
-def _call_vision_model(client: Anthropic, model_name: str, prompt: str, image_path: str) -> str:
+def _call_vision_model(
+    client: Anthropic,
+    model_name: str,
+    prompt: str,
+    image_path: str,
+    system: str | None = None,
+) -> str:
     image_file = Path(image_path)
     if not image_file.exists():
         raise AIModelCallError(f"Image does not exist: {image_path}")
@@ -134,7 +250,7 @@ def _call_vision_model(client: Anthropic, model_name: str, prompt: str, image_pa
         model=model_name,
         max_tokens=8192,
         temperature=0.2,
-        system=SYSTEM_PROMPT,
+        system=system if system is not None else SYSTEM_PROMPT,
         messages=[
             {
                 "role": "user",
@@ -155,12 +271,17 @@ def _call_vision_model(client: Anthropic, model_name: str, prompt: str, image_pa
     return _message_to_text(response)
 
 
-def _call_text_model(client: Anthropic, model_name: str, prompt: str) -> str:
+def _call_text_model(
+    client: Anthropic,
+    model_name: str,
+    prompt: str,
+    system: str | None = None,
+) -> str:
     response = client.messages.create(
         model=model_name,
         max_tokens=8192,
         temperature=0.2,
-        system=SYSTEM_PROMPT,
+        system=system if system is not None else SYSTEM_PROMPT,
         messages=[{"role": "user", "content": prompt}],
     )
     return _message_to_text(response)
@@ -212,9 +333,15 @@ def _extract_json_payload(raw_text: str) -> dict[str, object]:
     return parsed
 
 
+_FEEDBACK_JSON_KEYS = frozenset(
+    {"summary", "overall_score", "highlights", "issues", "recommendations", "frontend_report"}
+)
+
+
 def _parse_and_validate(raw_text: str) -> EvaluationResult:
     payload = _extract_json_payload(raw_text)
+    filtered = {k: v for k, v in payload.items() if k in _FEEDBACK_JSON_KEYS}
     try:
-        return EvaluationResult.model_validate(payload)
+        return EvaluationResult.model_validate(filtered)
     except ValidationError as exc:
         raise AIInvalidJSONError("Model output did not match required schema.") from exc

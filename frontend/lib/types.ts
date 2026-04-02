@@ -12,6 +12,10 @@ export type EvaluationIssue = {
   category: string;
 };
 
+export type SampleUi = {
+  html: string;
+};
+
 export type EvaluationResult = {
   summary: string;
   overall_score: number;
@@ -19,6 +23,7 @@ export type EvaluationResult = {
   issues: EvaluationIssue[];
   recommendations: string[];
   frontend_report?: string;
+  sample_ui?: SampleUi | null;
 };
 
 export type Evaluation = {
@@ -33,6 +38,7 @@ export type Evaluation = {
   error_message: string | null;
   result_json: EvaluationResult | Record<string, unknown>;
   frontend_report?: string;
+  sample_ui?: SampleUi | null;
   created_at: string;
 };
 
