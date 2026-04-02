@@ -1,4 +1,12 @@
-import { AssistMessage, CreatePersonaInput, Evaluation, Persona, PersonaAssistResponse } from "@/lib/types";
+import {
+  AssistMessage,
+  CreatePersonaInput,
+  CreateProjectInput,
+  Evaluation,
+  Persona,
+  PersonaAssistResponse,
+  Project,
+} from "@/lib/types";
 import { supabase } from "@/lib/supabase";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
@@ -64,8 +72,28 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export function getPersonas() {
-  return request<Persona[]>("/personas");
+export function getProjects() {
+  return request<Project[]>("/projects");
+}
+
+export function createProject(payload: CreateProjectInput) {
+  return request<Project>("/projects", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+}
+
+export function getPersonas(projectId?: number) {
+  const searchParams = new URLSearchParams();
+  if (projectId !== undefined) {
+    searchParams.set("project_id", String(projectId));
+  }
+
+  const query = searchParams.size > 0 ? `?${searchParams.toString()}` : "";
+  return request<Persona[]>(`/personas${query}`);
 }
 
 export function createPersona(payload: CreatePersonaInput) {
@@ -109,10 +137,13 @@ export function createEvaluation(formData: FormData) {
   });
 }
 
-export function getEvaluations(personaId?: number) {
+export function getEvaluations(options?: { personaId?: number; projectId?: number }) {
   const searchParams = new URLSearchParams();
-  if (personaId !== undefined) {
-    searchParams.set("persona_id", String(personaId));
+  if (options?.personaId !== undefined) {
+    searchParams.set("persona_id", String(options.personaId));
+  }
+  if (options?.projectId !== undefined) {
+    searchParams.set("project_id", String(options.projectId));
   }
 
   const query = searchParams.size > 0 ? `?${searchParams.toString()}` : "";

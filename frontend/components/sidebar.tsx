@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { type Session } from "@supabase/supabase-js";
+import { useProjectContext } from "@/lib/project-context";
 import { supabase } from "@/lib/supabase";
 
 const navItems = [
@@ -61,6 +62,19 @@ export function Sidebar() {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [showCreateProject, setShowCreateProject] = useState(false);
+  const [projectName, setProjectName] = useState("");
+  const [projectError, setProjectError] = useState("");
+  const {
+    projects,
+    selectedProjectId,
+    selectedProject,
+    loading: projectsLoading,
+    error: projectsError,
+    creating: projectCreating,
+    selectProject,
+    createProject,
+  } = useProjectContext();
 
   useEffect(() => {
     try {
@@ -116,6 +130,23 @@ export function Sidebar() {
     }
   }
 
+  async function onCreateProject() {
+    const trimmedName = projectName.trim();
+    if (!trimmedName) {
+      setProjectError("Project name is required.");
+      return;
+    }
+
+    try {
+      setProjectError("");
+      await createProject(trimmedName);
+      setProjectName("");
+      setShowCreateProject(false);
+    } catch (err) {
+      setProjectError(err instanceof Error ? err.message : "Unable to create project.");
+    }
+  }
+
   // Hide sidebar on login page so it can render full-screen
   if (pathname === "/login" || pathname === "/signup") return null;
 
@@ -152,6 +183,80 @@ export function Sidebar() {
                 <polyline points="15 18 9 12 15 6" />
               </svg>
             </button>
+          </div>
+
+          <div className="border-b border-slate-100 px-3 py-4">
+            <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Project</p>
+                  <p className="mt-1 truncate text-sm font-medium text-slate-900">
+                    {projectsLoading ? "Loading projects..." : selectedProject?.name ?? "No project selected"}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCreateProject((prev) => !prev);
+                    setProjectError("");
+                  }}
+                  className="rounded-md bg-indigo-50 px-2.5 py-1 text-[11px] font-semibold text-indigo-700 transition hover:bg-indigo-100"
+                >
+                  New
+                </button>
+              </div>
+
+              <div className="mt-3 space-y-2">
+                <select
+                  value={selectedProjectId}
+                  onChange={(event) => selectProject(event.target.value)}
+                  disabled={projectsLoading || projects.length === 0}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                >
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))}
+                </select>
+
+                {showCreateProject && (
+                  <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+                    <input
+                      type="text"
+                      value={projectName}
+                      onChange={(event) => setProjectName(event.target.value)}
+                      placeholder="New project name"
+                      className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                    />
+                    {(projectError || projectsError) && (
+                      <p className="text-xs text-red-600">{projectError || projectsError}</p>
+                    )}
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowCreateProject(false);
+                          setProjectName("");
+                          setProjectError("");
+                        }}
+                        className="rounded-md px-2.5 py-1.5 text-xs font-medium text-slate-500 transition hover:bg-slate-200 hover:text-slate-700"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={onCreateProject}
+                        disabled={projectCreating}
+                        className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-60"
+                      >
+                        {projectCreating ? "Creating..." : "Create"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Navigation */}

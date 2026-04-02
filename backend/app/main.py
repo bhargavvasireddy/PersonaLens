@@ -4,7 +4,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import auth, evaluations, health, personas
+from app.api import auth, evaluations, health, personas, projects
 from app.core.config import settings
 
 
@@ -26,5 +26,6 @@ app.add_middleware(
 
 app.include_router(health.router)
 app.include_router(auth.router)
+app.include_router(projects.router)
 app.include_router(personas.router)
 app.include_router(evaluations.router)

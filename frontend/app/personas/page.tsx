@@ -3,6 +3,7 @@
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
 import { assistPersona, createPersona, deletePersona, getEvaluations, getPersonas, updatePersona } from "@/lib/api";
 import { AssistMessage, Persona } from "@/lib/types";
+import { useProjectContext } from "@/lib/project-context";
 import { useAuthGuard } from "@/lib/use-auth-guard";
 
 type PersonaTemplate = {
@@ -45,6 +46,7 @@ const personaTemplates: PersonaTemplate[] = [
 ];
 
 export default function PersonasPage() {
+  const { selectedProjectId, selectedProject, loading: projectLoading } = useProjectContext();
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -72,11 +74,21 @@ export default function PersonasPage() {
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    getPersonas()
+    if (projectLoading) {
+      return;
+    }
+    if (!selectedProjectId) {
+      setPersonas([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    getPersonas(Number(selectedProjectId))
       .then(setPersonas)
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
-  }, []);
+  }, [selectedProjectId, projectLoading]);
 
   useEffect(() => {
     if (!editingPersona) {
@@ -97,10 +109,15 @@ export default function PersonasPage() {
       setDeleteError("");
       return;
     }
+    if (!selectedProjectId) {
+      setDeleteEvalCount(0);
+      setDeleteCountLoading(false);
+      return;
+    }
     let cancelled = false;
     setDeleteCountLoading(true);
     setDeleteEvalCount(null);
-    getEvaluations()
+    getEvaluations({ projectId: Number(selectedProjectId) })
       .then((evaluations) => {
         if (cancelled) {
           return;
@@ -123,7 +140,7 @@ export default function PersonasPage() {
     return () => {
       cancelled = true;
     };
-  }, [deleteTarget]);
+  }, [deleteTarget, selectedProjectId]);
 
   function applyTemplate(templateId: string) {
     const template = personaTemplates.find((p) => p.id === templateId);
@@ -153,7 +170,7 @@ export default function PersonasPage() {
         setPersonas((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
         setEditingPersona(null);
       } else {
-        const created = await createPersona(payload);
+        const created = await createPersona({ ...payload, project_id: Number(selectedProjectId) });
         setPersonas((prev) => [created, ...prev]);
         setShowModal(false);
       }
@@ -248,7 +265,10 @@ export default function PersonasPage() {
       <header className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Personas</h2>
-          <p className="mt-1 text-sm text-slate-500">Create and manage the personas used for UI evaluations.</p>
+          <p className="mt-1 text-sm text-slate-500">
+            Create and manage the personas used for UI evaluations.
+            {selectedProject ? ` Currently viewing ${selectedProject.name}.` : ""}
+          </p>
         </div>
         <button
           type="button"
@@ -284,7 +304,15 @@ export default function PersonasPage() {
       )}
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow ring-1 ring-black/5">
-        {loading ? (
+        {projectLoading ? (
+          <div className="flex items-center justify-center gap-2 px-6 py-16 text-sm text-slate-400">
+            <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            Loading project…
+          </div>
+        ) : loading ? (
           <div className="flex items-center justify-center gap-2 px-6 py-16 text-sm text-slate-400">
             <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -304,7 +332,11 @@ export default function PersonasPage() {
             </div>
             <div>
               <p className="text-sm font-medium text-slate-700">No personas yet</p>
-              <p className="mt-0.5 text-xs text-slate-400">Add your first persona to start running evaluations.</p>
+              <p className="mt-0.5 text-xs text-slate-400">
+                {selectedProject
+                  ? `Add your first persona in ${selectedProject.name} to start running evaluations.`
+                  : "Add your first persona to start running evaluations."}
+              </p>
             </div>
             <button
               type="button"

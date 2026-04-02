@@ -27,6 +27,8 @@ class EvaluationResult(BaseModel):
 
 class EvaluationCreateResponse(BaseModel):
     id: int
+    project_id: int
+    project_name: str
     image_path: str
     primary_persona_id: int
     primary_persona_name: str

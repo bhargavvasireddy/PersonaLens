@@ -1,5 +1,12 @@
+export type Project = {
+  id: number;
+  name: string;
+  created_at: string;
+};
+
 export type Persona = {
   id: number;
+  project_id: number;
   name: string;
   description: string;
   created_at: string;
@@ -28,6 +35,8 @@ export type EvaluationResult = {
 
 export type Evaluation = {
   id: number;
+  project_id: number;
+  project_name: string;
   image_path: string;
   primary_persona_id: number;
   primary_persona_name: string;
@@ -43,6 +52,7 @@ export type Evaluation = {
 };
 
 export type CreatePersonaInput = {
+  project_id?: number;
   name: string;
   description: string;
 };
@@ -55,4 +65,8 @@ export type AssistMessage = {
 export type PersonaAssistResponse = {
   message: string;
   suggested_description: string | null;
+};
+
+export type CreateProjectInput = {
+  name: string;
 };

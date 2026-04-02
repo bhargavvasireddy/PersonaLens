@@ -1,10 +1,10 @@
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_owner_user_id
+from app.api.deps import get_current_user, get_default_project, get_owner_user_id, get_project_for_owner
 from app.core.security import AuthenticatedPrincipal
 from app.db import models
 from app.db.session import get_db
@@ -33,16 +33,16 @@ def assist_persona(
 
 @router.get("/personas", response_model=list[PersonaRead])
 def list_personas(
+    project_id: int | None = Query(default=None, ge=1),
     db: Session = Depends(get_db),
     current_user: models.User | AuthenticatedPrincipal = Depends(get_current_user),
 ) -> list[models.Persona]:
     owner_user_id = get_owner_user_id(current_user)
-    return (
-        db.query(models.Persona)
-        .filter(models.Persona.owner_user_id == owner_user_id)
-        .order_by(models.Persona.created_at.desc())
-        .all()
-    )
+    query = db.query(models.Persona).filter(models.Persona.owner_user_id == owner_user_id)
+    if project_id is not None:
+        get_project_for_owner(db, owner_user_id, project_id)
+        query = query.filter(models.Persona.project_id == project_id)
+    return query.order_by(models.Persona.created_at.desc()).all()
 
 
 @router.post("/personas", response_model=PersonaRead, status_code=status.HTTP_201_CREATED)
@@ -56,7 +56,17 @@ def create_persona(
         raise HTTPException(status_code=400, detail="Persona name is required.")
 
     owner_user_id = get_owner_user_id(current_user)
-    persona = models.Persona(owner_user_id=owner_user_id, name=name, description=payload.description.strip())
+    project = (
+        get_project_for_owner(db, owner_user_id, payload.project_id)
+        if payload.project_id is not None
+        else get_default_project(db, owner_user_id)
+    )
+    persona = models.Persona(
+        owner_user_id=owner_user_id,
+        project_id=project.id,
+        name=name,
+        description=payload.description.strip(),
+    )
     db.add(persona)
     db.commit()
     db.refresh(persona)
@@ -109,6 +119,7 @@ def delete_persona(
         db.query(models.Evaluation)
         .filter(
             models.Evaluation.owner_user_id == owner_user_id,
+            models.Evaluation.project_id == persona.project_id,
             or_(
                 models.Evaluation.primary_persona_id == persona_id,
                 models.Evaluation.compare_persona_id == persona_id,

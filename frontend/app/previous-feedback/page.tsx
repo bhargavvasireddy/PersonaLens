@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import DOMPurify from "dompurify";
 import { getEvaluations, getPersonas } from "@/lib/api";
 import { clampScore, formatScoreWithMax } from "@/lib/evaluation-score";
+import { useProjectContext } from "@/lib/project-context";
 import { Evaluation, EvaluationResult, Persona } from "@/lib/types";
 import { useAuthGuard } from "@/lib/use-auth-guard";
 
@@ -128,6 +129,7 @@ function StructuredResult({ result }: { result: EvaluationResult }) {
 }
 
 export default function PreviousFeedbackPage() {
+  const { selectedProjectId, selectedProject, loading: projectLoading } = useProjectContext();
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
   const [selectedPersonaId, setSelectedPersonaId] = useState("");
@@ -138,7 +140,19 @@ export default function PreviousFeedbackPage() {
   useEffect(() => {
     let cancelled = false;
 
-    getPersonas()
+    if (projectLoading) {
+      return () => {
+        cancelled = true;
+      };
+    }
+    if (!selectedProjectId) {
+      setPersonas([]);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    getPersonas(Number(selectedProjectId))
       .then((rows) => {
         if (!cancelled) {
           setPersonas(rows);
@@ -153,14 +167,30 @@ export default function PreviousFeedbackPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [selectedProjectId, projectLoading]);
 
   useEffect(() => {
     let cancelled = false;
 
+    if (projectLoading) {
+      return () => {
+        cancelled = true;
+      };
+    }
+    if (!selectedProjectId) {
+      setEvaluations([]);
+      setLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
     setLoading(true);
     setError("");
-    getEvaluations(selectedPersonaId ? Number(selectedPersonaId) : undefined)
+    getEvaluations({
+      personaId: selectedPersonaId ? Number(selectedPersonaId) : undefined,
+      projectId: Number(selectedProjectId),
+    })
       .then((rows) => {
         if (!cancelled) {
           setEvaluations(rows);
@@ -181,7 +211,11 @@ export default function PreviousFeedbackPage() {
     return () => {
       cancelled = true;
     };
-  }, [selectedPersonaId]);
+  }, [selectedPersonaId, selectedProjectId, projectLoading]);
+
+  useEffect(() => {
+    setSelectedPersonaId("");
+  }, [selectedProjectId]);
 
   const selectedPersona = personas.find((persona) => String(persona.id) === selectedPersonaId) ?? null;
 
@@ -189,7 +223,10 @@ export default function PreviousFeedbackPage() {
     <section className="mx-auto w-full max-w-7xl space-y-6">
       <header>
         <h2 className="text-2xl font-bold text-slate-900">Previous Feedback</h2>
-        <p className="mt-1 text-sm text-slate-500">Review all past UI evaluation runs.</p>
+        <p className="mt-1 text-sm text-slate-500">
+          Review all past UI evaluation runs.
+          {selectedProject ? ` Current project: ${selectedProject.name}.` : ""}
+        </p>
         <div className="mt-5 border-b border-slate-200" />
       </header>
 
@@ -199,7 +236,9 @@ export default function PreviousFeedbackPage() {
           <p className="text-xs text-slate-500">
             {selectedPersona
               ? `Showing evaluations where ${selectedPersona.name} was the primary or comparison persona.`
-              : "Showing evaluations across all personas."}
+              : selectedProject
+                ? `Showing evaluations in ${selectedProject.name}.`
+                : "Showing evaluations across all personas."}
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:min-w-72">
@@ -233,7 +272,7 @@ export default function PreviousFeedbackPage() {
         </div>
       )}
 
-      {!loading && !error && (
+      {!projectLoading && !loading && !error && (
         <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
           <span>
             {evaluations.length} evaluation{evaluations.length === 1 ? "" : "s"}
@@ -250,17 +289,17 @@ export default function PreviousFeedbackPage() {
         </div>
       )}
 
-      {loading && (
+      {projectLoading || loading ? (
         <div className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-16 text-sm text-slate-400 shadow-sm">
           <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
-          Loading evaluations…
+          {projectLoading ? "Loading project…" : "Loading evaluations…"}
         </div>
-      )}
+      ) : null}
 
-      {!loading && evaluations.length === 0 && !error && (
+      {!projectLoading && !loading && evaluations.length === 0 && !error && (
         <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-6 py-16 text-center shadow-sm">
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
@@ -277,14 +316,16 @@ export default function PreviousFeedbackPage() {
             <p className="mt-0.5 text-xs text-slate-400">
               {selectedPersona
                 ? "Try another persona or clear the filter to see all results."
-                : "Run a UI analysis to see results here."}
+                : selectedProject
+                  ? `Run a UI analysis in ${selectedProject.name} to see results here.`
+                  : "Run a UI analysis to see results here."}
             </p>
           </div>
         </div>
       )}
 
       <div className="space-y-4">
-        {!loading && evaluations.map((evaluation) => {
+        {!projectLoading && !loading && evaluations.map((evaluation) => {
           const frontendReport = evaluation.frontend_report;
           const structured = isStructuredResult(evaluation.result_json) ? evaluation.result_json : null;
           const sampleHtml = sampleUiHtmlFromEvaluation(evaluation);
@@ -305,6 +346,9 @@ export default function PreviousFeedbackPage() {
                     Score: {formatScoreWithMax(evaluation.overall_score)}
                   </span>
                 )}
+                <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
+                  {evaluation.project_name}
+                </span>
                 <span className="ml-auto text-xs text-slate-400">
                   {new Date(evaluation.created_at).toLocaleString(undefined, {
                     month: "short",

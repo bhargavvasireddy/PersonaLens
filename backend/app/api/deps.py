@@ -37,3 +37,31 @@ def get_owner_user_id(current_user: models.User | AuthenticatedPrincipal) -> str
     if isinstance(current_user, AuthenticatedPrincipal):
         return f"supabase:{current_user.subject}"
     return f"local:{current_user.id}"
+
+
+def get_default_project(db: Session, owner_user_id: str) -> models.Project:
+    project = (
+        db.query(models.Project)
+        .filter(models.Project.owner_user_id == owner_user_id)
+        .order_by(models.Project.created_at.asc(), models.Project.id.asc())
+        .first()
+    )
+    if project is not None:
+        return project
+
+    project = models.Project(owner_user_id=owner_user_id, name="General")
+    db.add(project)
+    db.commit()
+    db.refresh(project)
+    return project
+
+
+def get_project_for_owner(db: Session, owner_user_id: str, project_id: int) -> models.Project:
+    project = (
+        db.query(models.Project)
+        .filter(models.Project.id == project_id, models.Project.owner_user_id == owner_user_id)
+        .first()
+    )
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found.")
+    return project

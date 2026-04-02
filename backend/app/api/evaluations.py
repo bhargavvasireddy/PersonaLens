@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_owner_user_id
+from app.api.deps import get_current_user, get_owner_user_id, get_project_for_owner
 from app.core.config import settings
 from app.core.security import AuthenticatedPrincipal
 from app.db import models
@@ -60,8 +60,16 @@ def _serialize_evaluation(evaluation: models.Evaluation, db: Session, owner_user
     if not isinstance(frontend_report, str):
         frontend_report = ""
 
+    project = (
+        db.query(models.Project)
+        .filter(models.Project.id == evaluation.project_id, models.Project.owner_user_id == owner_user_id)
+        .first()
+    )
+
     return EvaluationRead(
         id=evaluation.id,
+        project_id=evaluation.project_id,
+        project_name=project.name if project is not None else "Unknown project",
         image_path=evaluation.image_path,
         primary_persona_id=evaluation.primary_persona_id,
         primary_persona_name=primary_persona.name if primary_persona is not None else "Unknown",
@@ -103,6 +111,7 @@ def create_evaluation(
     )
     if primary_persona is None:
         raise HTTPException(status_code=400, detail="Primary persona not found.")
+    project = get_project_for_owner(db, owner_user_id, primary_persona.project_id)
 
     compare_persona_id_value: int | None = None
     if compare_persona_id is not None and compare_persona_id.strip():
@@ -118,6 +127,8 @@ def create_evaluation(
         )
         if compare_persona is None:
             raise HTTPException(status_code=400, detail="Compare persona not found.")
+        if compare_persona.project_id != primary_persona.project_id:
+            raise HTTPException(status_code=400, detail="Both personas must belong to the same project.")
     else:
         compare_persona = None
 
@@ -142,6 +153,7 @@ def create_evaluation(
         logger.info("AI returned OK")
         evaluation = models.Evaluation(
             owner_user_id=owner_user_id,
+            project_id=project.id,
             image_path=str(target_path),
             primary_persona_id=primary_persona_id_value,
             compare_persona_id=compare_persona_id_value,
@@ -159,6 +171,7 @@ def create_evaluation(
         logger.exception("AI evaluation failed: %s", exc)
         failed_evaluation = models.Evaluation(
             owner_user_id=owner_user_id,
+            project_id=project.id,
             image_path=str(target_path),
             primary_persona_id=primary_persona_id_value,
             compare_persona_id=compare_persona_id_value,
@@ -176,6 +189,7 @@ def create_evaluation(
         logger.exception("AI returned invalid JSON: %s", exc)
         failed_evaluation = models.Evaluation(
             owner_user_id=owner_user_id,
+            project_id=project.id,
             image_path=str(target_path),
             primary_persona_id=primary_persona_id_value,
             compare_persona_id=compare_persona_id_value,
@@ -193,6 +207,7 @@ def create_evaluation(
 
 @router.get("/evaluations", response_model=list[EvaluationRead])
 def list_evaluations(
+    project_id: int | None = Query(default=None, ge=1),
     persona_id: int | None = Query(default=None, ge=1),
     db: Session = Depends(get_db),
     current_user: models.User | AuthenticatedPrincipal = Depends(get_current_user),
@@ -200,6 +215,9 @@ def list_evaluations(
     owner_user_id = get_owner_user_id(current_user)
 
     query = db.query(models.Evaluation).filter(models.Evaluation.owner_user_id == owner_user_id)
+    if project_id is not None:
+        get_project_for_owner(db, owner_user_id, project_id)
+        query = query.filter(models.Evaluation.project_id == project_id)
     if persona_id is not None:
         persona = (
             db.query(models.Persona)
@@ -208,6 +226,8 @@ def list_evaluations(
         )
         if persona is None:
             raise HTTPException(status_code=404, detail="Persona not found.")
+        if project_id is not None and persona.project_id != project_id:
+            raise HTTPException(status_code=400, detail="Persona does not belong to the selected project.")
 
         query = query.filter(
             or_(
