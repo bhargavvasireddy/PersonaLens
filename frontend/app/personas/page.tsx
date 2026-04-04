@@ -61,6 +61,7 @@ export default function PersonasPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
+  const [search, setSearch] = useState("");
   const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -260,6 +261,18 @@ export default function PersonasPage() {
     }
   }
 
+  const filteredPersonas = personas.filter((persona) => {
+    const query = search.trim().toLowerCase();
+    if (!query) {
+      return true;
+    }
+
+    return (
+      persona.name.toLowerCase().includes(query) ||
+      (persona.description ?? "").toLowerCase().includes(query)
+    );
+  });
+
   return (
     <section className="mx-auto w-full max-w-7xl space-y-6">
       <header className="flex items-center justify-between">
@@ -300,6 +313,43 @@ export default function PersonasPage() {
             <line x1="12" y1="16" x2="12.01" y2="16" />
           </svg>
           {error}
+        </div>
+      )}
+
+      {!projectLoading && !loading && personas.length > 0 && (
+        <div className="flex items-center justify-between gap-3">
+          <div className="relative w-full max-w-sm">
+            <input
+              type="text"
+              placeholder="Search personas by name or description..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 pr-10 text-sm text-slate-900 placeholder-slate-400 shadow-sm transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none"
+            />
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
+          </div>
+
+          {search.trim() && (
+            <button
+              type="button"
+              onClick={() => setSearch("")}
+              className="shrink-0 rounded-lg bg-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-300"
+            >
+              Clear
+            </button>
+          )}
         </div>
       )}
 
@@ -354,6 +404,28 @@ export default function PersonasPage() {
               Add persona
             </button>
           </div>
+        ) : filteredPersonas.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.3-4.3" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-slate-700">No matching personas</p>
+              <p className="mt-0.5 text-xs text-slate-400">
+                Try a different search term or clear the search to see all personas.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSearch("")}
+              className="mt-1 rounded-lg bg-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
+            >
+              Clear search
+            </button>
+          </div>
         ) : (
           <table className="min-w-full divide-y divide-slate-100 text-sm">
             <thead>
@@ -365,10 +437,10 @@ export default function PersonasPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {personas.map((persona) => (
+              {filteredPersonas.map((persona) => (
                 <tr key={persona.id} className="transition-colors hover:bg-slate-50/70">
                   <td className="px-5 py-3.5 font-medium text-slate-900">{persona.name}</td>
-                  <td className="px-5 py-3.5 text-slate-500 max-w-xs truncate">
+                  <td className="max-w-xs truncate px-5 py-3.5 text-slate-500">
                     {persona.description || <span className="text-slate-300">—</span>}
                   </td>
                   <td className="whitespace-nowrap px-5 py-3.5 text-slate-400">
@@ -414,10 +486,10 @@ export default function PersonasPage() {
             if (e.target === e.currentTarget) closeModal();
           }}
         >
-          <div className={`w-full rounded-2xl bg-white shadow-xl flex overflow-hidden transition-all ${assistOpen ? "max-w-2xl" : "max-w-md"}`}>
+          <div className={`flex w-full overflow-hidden rounded-2xl bg-white shadow-xl transition-all ${assistOpen ? "max-w-2xl" : "max-w-md"}`}>
             {/* Form column */}
-            <div className="flex-1 min-w-0 p-6 flex flex-col">
-              <div className="flex items-center justify-between mb-5">
+            <div className="flex min-w-0 flex-1 flex-col p-6">
+              <div className="mb-5 flex items-center justify-between">
                 <h3 className="text-base font-semibold text-slate-900">{editingPersona ? "Edit Persona" : "Add Persona"}</h3>
                 <div className="flex items-center gap-2">
                   <button
@@ -425,7 +497,7 @@ export default function PersonasPage() {
                     onClick={assistOpen ? () => setAssistOpen(false) : openAssist}
                     disabled={!name.trim()}
                     title={name.trim() ? "Get AI help building this persona" : "Enter a name first"}
-                    className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed ${
+                    className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition focus:outline-none disabled:cursor-not-allowed disabled:opacity-40 ${
                       assistOpen
                         ? "bg-violet-100 text-violet-700 hover:bg-violet-200"
                         : "bg-slate-100 text-slate-600 hover:bg-slate-200"
@@ -449,9 +521,35 @@ export default function PersonasPage() {
                   </button>
                 </div>
               </div>
-              <form onSubmit={onSubmitPersona} className="flex flex-col flex-1 space-y-4">
+              <form onSubmit={onSubmitPersona} className="flex flex-1 flex-col space-y-4">
+                {!editingPersona && (
+                  <div>
+                    <label htmlFor="persona-template" className="mb-1.5 block text-sm font-medium text-slate-700">
+                      Starter template
+                      <span className="ml-1 font-normal text-slate-400">(optional)</span>
+                    </label>
+                    <select
+                      id="persona-template"
+                      value={selectedTemplateId}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setSelectedTemplateId(value);
+                        applyTemplate(value);
+                      }}
+                      className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 shadow-sm transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                    >
+                      <option value="">Choose a starter persona</option>
+                      {personaTemplates.map((template) => (
+                        <option key={template.id} value={template.id}>
+                          {template.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 <div>
-                  <label htmlFor="persona-name" className="block text-sm font-medium text-slate-700 mb-1.5">
+                  <label htmlFor="persona-name" className="mb-1.5 block text-sm font-medium text-slate-700">
                     Name <span className="text-red-400">*</span>
                   </label>
                   <input
@@ -463,8 +561,8 @@ export default function PersonasPage() {
                     autoFocus
                   />
                 </div>
-                <div className="flex-1 flex flex-col">
-                  <label htmlFor="persona-description" className="block text-sm font-medium text-slate-700 mb-1.5">
+                <div className="flex flex-1 flex-col">
+                  <label htmlFor="persona-description" className="mb-1.5 block text-sm font-medium text-slate-700">
                     Description
                     <span className="ml-1 font-normal text-slate-400">(optional)</span>
                   </label>
@@ -511,18 +609,18 @@ export default function PersonasPage() {
             {/* AI Assist panel */}
             {assistOpen && (
               <>
-                <div className="w-px bg-slate-200 flex-shrink-0" />
-                <div className="w-80 flex-shrink-0 flex flex-col p-4 bg-slate-50">
-                  <div className="flex items-center gap-2 mb-3">
+                <div className="w-px flex-shrink-0 bg-slate-200" />
+                <div className="flex w-80 flex-shrink-0 flex-col bg-slate-50 p-4">
+                  <div className="mb-3 flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5 text-violet-500">
                       <path d="M12 2a7 7 0 0 1 7 7c0 3-1.8 5.5-4.5 6.7V18h-5v-2.3C6.8 14.5 5 12 5 9a7 7 0 0 1 7-7z" />
                       <path d="M9 22h6" />
                     </svg>
-                    <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">AI Assist</span>
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">AI Assist</span>
                   </div>
 
                   {/* Message list */}
-                  <div className="flex-1 overflow-y-auto space-y-2.5 mb-3 max-h-72 pr-1">
+                  <div className="mb-3 max-h-72 flex-1 space-y-2.5 overflow-y-auto pr-1">
                     {assistMessages.map((msg, i) => (
                       <div
                         key={i}
@@ -531,8 +629,8 @@ export default function PersonasPage() {
                         <div
                           className={`max-w-[85%] rounded-xl px-3 py-2 text-xs leading-relaxed ${
                             msg.role === "user"
-                              ? "bg-indigo-600 text-white rounded-br-sm"
-                              : "bg-white border border-slate-200 text-slate-700 rounded-bl-sm shadow-sm"
+                              ? "rounded-br-sm bg-indigo-600 text-white"
+                              : "rounded-bl-sm border border-slate-200 bg-white text-slate-700 shadow-sm"
                           }`}
                         >
                           {msg.content}
@@ -541,11 +639,11 @@ export default function PersonasPage() {
                     ))}
                     {assistLoading && (
                       <div className="flex justify-start">
-                        <div className="bg-white border border-slate-200 rounded-xl rounded-bl-sm px-3 py-2 shadow-sm">
-                          <div className="flex gap-1 items-center">
-                            <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:0ms]" />
-                            <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:150ms]" />
-                            <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:300ms]" />
+                        <div className="rounded-xl rounded-bl-sm border border-slate-200 bg-white px-3 py-2 shadow-sm">
+                          <div className="flex items-center gap-1">
+                            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:0ms]" />
+                            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:150ms]" />
+                            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:300ms]" />
                           </div>
                         </div>
                       </div>
@@ -556,8 +654,8 @@ export default function PersonasPage() {
                   {/* Suggestion card */}
                   {lastSuggestion && (
                     <div className="mb-3 rounded-lg border border-violet-200 bg-violet-50 p-3">
-                      <p className="text-xs font-semibold text-violet-700 mb-1.5">Suggested description</p>
-                      <p className="text-xs text-slate-700 leading-relaxed">{lastSuggestion}</p>
+                      <p className="mb-1.5 text-xs font-semibold text-violet-700">Suggested description</p>
+                      <p className="text-xs leading-relaxed text-slate-700">{lastSuggestion}</p>
                       <button
                         type="button"
                         onClick={() => setDescription(lastSuggestion)}
@@ -580,7 +678,7 @@ export default function PersonasPage() {
                       onKeyDown={onAssistKeyDown}
                       disabled={assistLoading}
                       placeholder="Your answer…"
-                      className="flex-1 min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 placeholder-slate-400 shadow-sm transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none disabled:opacity-50"
+                      className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 placeholder-slate-400 shadow-sm transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none disabled:opacity-50"
                     />
                     <button
                       type="button"
