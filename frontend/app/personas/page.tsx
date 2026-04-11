@@ -427,55 +427,75 @@ export default function PersonasPage() {
             </button>
           </div>
         ) : (
-          <table className="min-w-full divide-y divide-slate-100 text-sm">
-            <thead>
-              <tr className="bg-slate-50">
-                <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Name</th>
-                <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Description</th>
-                <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Created</th>
-                <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredPersonas.map((persona) => (
-                <tr key={persona.id} className="transition-colors hover:bg-slate-50/70">
-                  <td className="px-5 py-3.5 font-medium text-slate-900">{persona.name}</td>
-                  <td className="max-w-xs truncate px-5 py-3.5 text-slate-500">
-                    {persona.description || <span className="text-slate-300">—</span>}
-                  </td>
-                  <td className="whitespace-nowrap px-5 py-3.5 text-slate-400">
-                    {new Date(persona.created_at).toLocaleDateString(undefined, {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric"
-                    })}
-                  </td>
-                  <td className="whitespace-nowrap px-5 py-3.5 text-right">
-                    <div className="flex justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowModal(false);
-                          resetAssist();
-                          setEditingPersona(persona);
-                        }}
-                        className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDeleteTarget(persona)}
-                        className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
+          <div className="overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch]">
+            <table className="w-full min-w-[36rem] table-fixed divide-y divide-slate-100 text-sm">
+              <colgroup>
+                <col className="w-[15%]" />
+                <col />
+                <col className="w-[5.25rem] sm:w-[6rem]" />
+                <col className="w-[9.75rem]" />
+              </colgroup>
+              <thead>
+                <tr className="bg-slate-50">
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Name
+                  </th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Description
+                  </th>
+                  <th className="whitespace-nowrap px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Created
+                  </th>
+                  <th className="whitespace-nowrap px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Actions
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredPersonas.map((persona) => (
+                  <tr key={persona.id} className="transition-colors hover:bg-slate-50/70">
+                    <td className="align-top px-5 py-3.5 font-medium text-slate-900">
+                      <span className="block break-words">{persona.name}</span>
+                    </td>
+                    <td className="align-top px-5 py-3.5 text-slate-500">
+                      <div className="min-w-0 max-w-full break-words [overflow-wrap:anywhere]">
+                        {persona.description || <span className="text-slate-300">—</span>}
+                      </div>
+                    </td>
+                    <td className="align-top whitespace-nowrap px-5 py-3.5 text-slate-400">
+                      {new Date(persona.created_at).toLocaleDateString(undefined, {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric"
+                      })}
+                    </td>
+                    <td className="align-top whitespace-nowrap px-5 py-3.5 text-right">
+                      <div className="flex justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowModal(false);
+                            resetAssist();
+                            setEditingPersona(persona);
+                          }}
+                          className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteTarget(persona)}
+                          className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 

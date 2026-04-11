@@ -21,39 +21,13 @@ class AIInvalidJSONError(Exception):
 
 
 SYSTEM_PROMPT = (
-    "You are a senior UX researcher. Return only valid JSON and no extra text."
-    " Evaluate the UI screenshot against the persona context and provide actionable feedback."
-)
-
-SAMPLE_UI_SYSTEM_PROMPT = (
-    "You are a product designer creating HTML UI mockups. Return only valid JSON and no extra text."
-    ' The JSON must have exactly one key, "html", whose value is a string of HTML.'
+    "You are a senior UX researcher and product designer. Return only valid JSON and no extra text."
+    " Evaluate the UI screenshot against the persona context, provide actionable feedback, and include an illustrative"
+    " HTML mockup in the same response as specified."
 )
 
 
 def evaluate_ui(
-    image_path: str,
-    primary_persona: Persona,
-    compare_persona: Persona | None = None,
-) -> EvaluationResult:
-    if not settings.model_key.strip():
-        raise AIModelCallError("MODEL_KEY is not configured.")
-
-    feedback = evaluate_feedback(
-        image_path=image_path,
-        primary_persona=primary_persona,
-        compare_persona=compare_persona,
-    )
-    sample_ui = generate_sample_ui(
-        image_path=image_path,
-        feedback=feedback,
-        primary_persona=primary_persona,
-        compare_persona=compare_persona,
-    )
-    return feedback.model_copy(update={"sample_ui": sample_ui})
-
-
-def evaluate_feedback(
     image_path: str,
     primary_persona: Persona,
     compare_persona: Persona | None = None,
@@ -71,7 +45,8 @@ def evaluate_feedback(
         try:
             fallback_prompt = (
                 f"{prompt}\n\nFallback disclaimer: visual analysis is unavailable; treat this as a text-only"
-                f" evaluation for screenshot file '{Path(image_path).name}'."
+                f" evaluation for screenshot file '{Path(image_path).name}'. Infer layout where needed. Still return a"
+                " complete JSON object including sample_ui (html may be a minimal placeholder if necessary)."
             )
             raw_text = _call_text_model(client=client, model_name=model_name, prompt=fallback_prompt)
         except Exception as fallback_error:
@@ -79,90 +54,7 @@ def evaluate_feedback(
                 f"Vision call failed ({vision_error}); text fallback failed ({fallback_error})."
             ) from fallback_error
 
-    return _parse_and_validate(raw_text)
-
-
-def generate_sample_ui(
-    image_path: str,
-    feedback: EvaluationResult,
-    primary_persona: Persona,
-    compare_persona: Persona | None = None,
-) -> SampleUi:
-    if not settings.model_key.strip():
-        raise AIModelCallError("MODEL_KEY is not configured.")
-
-    client = Anthropic(api_key=settings.model_key)
-    model_name = (settings.model_name or "").strip() or "claude-haiku-4-5"
-    prompt = _build_sample_ui_prompt(feedback, primary_persona, compare_persona)
-
-    try:
-        raw_text = _call_vision_model(
-            client=client,
-            model_name=model_name,
-            prompt=prompt,
-            image_path=image_path,
-            system=SAMPLE_UI_SYSTEM_PROMPT,
-        )
-    except Exception as vision_error:
-        try:
-            fallback_prompt = (
-                f"{prompt}\n\nFallback: if you cannot see the image, infer layout from the evaluation JSON only."
-            )
-            raw_text = _call_text_model(
-                client=client,
-                model_name=model_name,
-                prompt=fallback_prompt,
-                system=SAMPLE_UI_SYSTEM_PROMPT,
-            )
-        except Exception as fallback_error:
-            raise AIModelCallError(
-                f"Sample UI vision call failed ({vision_error}); text fallback failed ({fallback_error})."
-            ) from fallback_error
-
-    return _parse_sample_ui(raw_text)
-
-
-def _build_sample_ui_prompt(
-    feedback: EvaluationResult,
-    primary_persona: Persona,
-    compare_persona: Persona | None,
-) -> str:
-    payload = feedback.model_dump(exclude={"sample_ui"}, exclude_none=True)
-    feedback_json = json.dumps(payload, ensure_ascii=False)
-    if compare_persona is not None:
-        persona_ctx = (
-            f"Primary persona: {primary_persona.name}\n{primary_persona.description}\n\n"
-            f"Compare persona: {compare_persona.name}\n{compare_persona.description}"
-        )
-    else:
-        persona_ctx = f"Persona: {primary_persona.name}\n{primary_persona.description}"
-
-    return f"""
-The image is the current UI screenshot. Below is structured UX feedback (JSON) from a prior evaluation pass.
-
-{persona_ctx}
-
-Evaluation JSON (verbatim):
-{feedback_json}
-
-Task: Produce a single HTML fragment that mockups an improved or alternative UI addressing the feedback and persona needs. This is illustrative, not a pixel-perfect copy.
-
-Return JSON with exactly this structure:
-{{ "html": "<div class=\\"sample-ui-mock\\">...</div>" }}
-
-Rules:
-- The "html" value must be a single HTML fragment only (no <!DOCTYPE>, no <html>/<body> wrapper). Root element must use class "sample-ui-mock".
-- Use semantic elements (header, nav, main, section, button, etc.) as appropriate; inline styles are allowed sparingly for layout.
-- Do not use markdown, code fences, or any text outside the JSON object.
-""".strip()
-
-
-def _parse_sample_ui(raw_text: str) -> SampleUi:
-    payload = _extract_json_payload(raw_text)
-    html = payload.get("html")
-    if not isinstance(html, str):
-        raise AIInvalidJSONError('Sample UI output must be JSON with a string "html" key.')
-    return SampleUi(html=html)
+    return _parse_evaluation_response(raw_text)
 
 
 def _build_prompt(primary_persona: Persona, compare_persona: Persona | None) -> str:
@@ -199,7 +91,7 @@ Primary persona name: {primary_persona.name}
 Primary persona description: {primary_persona.description}
 {compare_block}
 
-Return JSON with exactly this structure:
+Return JSON with exactly this structure (one object, all top-level keys required):
 {{
   "summary": "string",
   "overall_score": 7.5,
@@ -213,7 +105,10 @@ Return JSON with exactly this structure:
     }}
   ],
   "recommendations": ["string"],
-  "frontend_report": "string"
+  "frontend_report": "string",
+  "sample_ui": {{
+    "html": "<div class=\\"sample-ui-mock\\">...</div>"
+  }}
 }}
 
 Rules:
@@ -221,6 +116,7 @@ Rules:
 - In frontend_report, state this score clearly **out of 10** (e.g. \"7.5 / 10\" or \"7.5 out of 10\") and match the JSON value.
 - Keep recommendations concise and actionable.
 - {report_instruction}
+- sample_ui (required): an object with exactly one property \"html\" (string). The html value must be a single HTML fragment only (no <!DOCTYPE>, no <html>/<body> wrapper). Root element must use class \"sample-ui-mock\". Produce an improved or alternative UI mockup that addresses your evaluation and persona needs, using the screenshot as reference; illustrative, not pixel-perfect. Use semantic elements (header, nav, main, section, button, etc.) as appropriate; inline styles are allowed sparingly for layout.
 - Do not return markdown syntax (# or **), code fences, or prose outside the JSON object.
 """.strip()
 
@@ -338,10 +234,21 @@ _FEEDBACK_JSON_KEYS = frozenset(
 )
 
 
-def _parse_and_validate(raw_text: str) -> EvaluationResult:
+def _parse_evaluation_response(raw_text: str) -> EvaluationResult:
     payload = _extract_json_payload(raw_text)
     filtered = {k: v for k, v in payload.items() if k in _FEEDBACK_JSON_KEYS}
+
+    sample_ui: SampleUi | None = None
+    sample_raw = payload.get("sample_ui")
+    if isinstance(sample_raw, dict):
+        html = sample_raw.get("html")
+        if isinstance(html, str):
+            sample_ui = SampleUi(html=html)
+    if sample_ui is None:
+        sample_ui = SampleUi(html="")
+
+    merged: dict[str, object] = {**filtered, "sample_ui": sample_ui}
     try:
-        return EvaluationResult.model_validate(filtered)
+        return EvaluationResult.model_validate(merged)
     except ValidationError as exc:
         raise AIInvalidJSONError("Model output did not match required schema.") from exc
