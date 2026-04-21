@@ -448,7 +448,8 @@ PersonaLens/
 
 ## Deployed App
 
-There is currently no publicly deployed version of PersonaLens. Follow the setup instructions above to run it locally.
+Backend Host Link (Render): https://personalens-136e.onrender.com/
+Frontend Host Link (Vercel): N/A
 
 ---
 
