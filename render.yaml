@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: personalens-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: MODEL_KEY
+        sync: false
+      - key: MODEL_NAME
+        value: claude-haiku-4-5
+      - key: AUTH_PROVIDER
+        value: supabase
+      - key: CORS_ORIGINS
+        sync: false
