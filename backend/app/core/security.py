@@ -94,11 +94,19 @@ def decode_supabase_access_token(token: str) -> AuthenticatedPrincipal:
         raise TokenValidationError("SUPABASE_URL is not configured.")
     try:
         unverified = jwt.get_unverified_header(token)
-        if unverified.get("alg") != "ES256":
-            raise TokenValidationError("Supabase access token must use ES256.")
-
-        client = _get_supabase_jwk_client()
-        signing_key = client.get_signing_key_from_jwt(token)
+        algorithm = unverified.get("alg")
+        if algorithm == "ES256":
+            client = _get_supabase_jwk_client()
+            signing_key = client.get_signing_key_from_jwt(token)
+            key = signing_key.key
+            algorithms = ["ES256"]
+        elif algorithm == "HS256":
+            if not settings.supabase_jwt_secret.strip():
+                raise TokenValidationError("SUPABASE_JWT_SECRET is required for HS256 Supabase tokens.")
+            key = settings.supabase_jwt_secret
+            algorithms = ["HS256"]
+        else:
+            raise TokenValidationError("Unsupported Supabase access token algorithm.")
     except MissingCryptographyError as exc:
         logger.error("Missing dependency for ES256 verification: %s", exc)
         raise TokenValidationError("Server is missing JWT crypto dependency.") from exc
@@ -117,8 +125,8 @@ def decode_supabase_access_token(token: str) -> AuthenticatedPrincipal:
     try:
         payload = jwt.decode(
             token,
-            signing_key.key,
-            algorithms=["ES256"],
+            key,
+            algorithms=algorithms,
             options=options,
             **decode_kwargs,
         )
